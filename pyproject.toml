@@ -1,0 +1,9 @@
+[project]
+name = "pyweek-40"
+version = "0.1.0"
+description = "My submission for PyWeek40 Game Jam"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "raylib>=5.5.0.3",
+]
