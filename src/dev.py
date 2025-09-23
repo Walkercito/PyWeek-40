@@ -12,7 +12,7 @@ class Game:
         self.import_assets()
 
         self.camera = Camera3D()
-        self.camera.position = Vector3(0.0, 20.0, 20.0)
+        # camera postion will be updated in update()
         self.camera.target = Vector3(0.0, 0.0, 0.0)
         self.camera.up = Vector3(0.0, 1.0, 0.0) 
         self.camera.fovy = 45.0 
@@ -38,6 +38,13 @@ class Game:
     def update(self):
         dt = get_frame_time() 
         self.player.update(dt) 
+
+        # anchored to the player
+        self.camera.target = self.player.position
+        
+        self.camera.position.x = self.player.position.x 
+        self.camera.position.y = self.player.position.y + 8.0  # 8u above the player
+        self.camera.position.z = self.player.position.z + 15.0  # 15u behind the player
 
 
     def draw(self):

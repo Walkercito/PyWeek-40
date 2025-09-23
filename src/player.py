@@ -10,7 +10,7 @@ class Player(Model):
     
     def input(self):
         self.direction.x = int(is_key_down(KEY_D)) - int(is_key_down(KEY_A))
-        self.direction.z = int(is_key_down(KEY_W)) - int(is_key_down(KEY_S))
+        self.direction.z = int(is_key_down(KEY_S)) - int(is_key_down(KEY_W))
         self.direction.y = int(is_key_down(KEY_SPACE)) - int(is_key_down(KEY_LEFT_SHIFT))
         if is_key_pressed(KEY_ENTER):
             self.shoot_func(self.position)
