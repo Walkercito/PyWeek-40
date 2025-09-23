@@ -30,10 +30,10 @@ class Fog(Model):
         vs_path = join("shaders", "fog", "fog.vs")
         fs_path = join("shaders", "fog", "fog.fs")
         
-        if not os.path.exists(vs_path) or not os.path.exists(fs_path):
+        if not exists(vs_path) or not exists(fs_path):
             print(f"Warning: Shader files not found:")
-            print(f"  Vertex shader: {vs_path} - {'[*]' if os.path.exists(vs_path) else '[✗]'}")
-            print(f"  Fragment shader: {fs_path} - {'[*]' if os.path.exists(fs_path) else '[✗]'}")
+            print(f"  Vertex shader: {vs_path} - {'[*]' if exists(vs_path) else '[✗]'}")
+            print(f"  Fragment shader: {fs_path} - {'[*]' if exists(fs_path) else '[✗]'}")
             print("Using basic rendering...")
             self.shader_loaded = False
             self.shader = None
