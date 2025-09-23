@@ -81,12 +81,11 @@ class Game:
     def draw(self):
         begin_drawing()
         clear_background(BLACK)
-        
         begin_mode_3d(self.camera)
 
         self.fog.draw()
+
         end_mode_3d()
-        
         self.draw_ui()
         end_drawing()
         

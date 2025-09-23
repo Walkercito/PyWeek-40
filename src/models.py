@@ -136,3 +136,5 @@ class Fog(Model):
     def __del__(self):
         if hasattr(self, 'shader') and self.shader is not None:
             unload_shader(self.shader)
+
+
