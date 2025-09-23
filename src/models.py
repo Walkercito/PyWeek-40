@@ -1,5 +1,5 @@
 from settings import *
-import os
+
 
 
 class Model:
@@ -27,8 +27,8 @@ class Fog(Model):
         mesh = gen_mesh_plane(size, size, segments, segments)
         model = load_model_from_mesh(mesh)
 
-        vs_path = os.path.join("shaders", "fog", "fog.vs")
-        fs_path = os.path.join("shaders", "fog", "fog.fs")
+        vs_path = join("shaders", "fog", "fog.vs")
+        fs_path = join("shaders", "fog", "fog.fs")
         
         if not os.path.exists(vs_path) or not os.path.exists(fs_path):
             print(f"Warning: Shader files not found:")
