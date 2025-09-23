@@ -1,6 +1,8 @@
-from settings import * 
-from models import Fog
 from math import sin
+
+from settings import * 
+from player import Player
+from models import Fog
 
 
 class Game:
@@ -37,18 +39,27 @@ class Game:
             color=Vector3(0.6, 0.8, 1.0)
         )
 
+        self.player = Player(self.models["player"], self.shoot)
+
 
     def import_assets(self):
-        self.models = {}
+        self.models = {
+            "player": load_model(join("assets", "models", "player", "plane01.glb"))
+        }
         self.audio = {}
     
+
+    def shoot(self, position):
+        print("Shoot!")
+
 
     def cycle_fog_color(self):
         self.current_color_index = (self.current_color_index + 1) % len(self.base_colors)
 
 
     def update(self):
-        dt = get_frame_time()   
+        dt = get_frame_time()
+        self.player.update(dt)
         self.color_phase += dt * 0.3
         
         current_color = self.base_colors[self.current_color_index]
@@ -84,6 +95,7 @@ class Game:
         begin_mode_3d(self.camera)
 
         self.fog.draw()
+        self.player.draw()
 
         end_mode_3d()
         self.draw_ui()

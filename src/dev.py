@@ -12,7 +12,7 @@ class Game:
         self.import_assets()
 
         self.camera = Camera3D()
-        self.camera.position = Vector3(0.0, 10.0, 10.0)
+        self.camera.position = Vector3(0.0, 20.0, 20.0)
         self.camera.target = Vector3(0.0, 0.0, 0.0)
         self.camera.up = Vector3(0.0, 1.0, 0.0) 
         self.camera.fovy = 45.0 
