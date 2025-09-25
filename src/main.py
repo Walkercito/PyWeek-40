@@ -1,6 +1,8 @@
 from settings import * 
+
 from player import Player
 from models import Fog
+from models import Skycraper
 
 
 class Game:
@@ -54,10 +56,14 @@ class Game:
         self.camera.position = Vector3(self.player.position.x, self.player.position.y + 10, self.player.position.z + self.camera_distance)
         self.camera.target = vector3_add(self.player.position, self.camera_target_offset)
 
+        self.skycraper = Skycraper(self.models["skycraper01"], Vector3(0, -10, 10))
+
 
     def import_assets(self):
         self.models = {
-            "player": load_model(join("assets", "models", "player", "plane01.glb"))
+            "player": load_model(join("assets", "models", "player", "plane01.glb")),
+            "skycraper01": load_model(join("assets", "models", "buildings", "1.glb")),
+            "skycraper02": load_model(join("assets", "models", "buildings", "2.glb"))
         }
         self.audio = {
             "warning": load_sound(join("assets", "audio", "beep-warning.mp3"))
@@ -170,6 +176,7 @@ class Game:
 
         self.fog.draw()
         self.player.draw()
+        self.skycraper.draw()
 
         end_mode_3d()
         self.draw_ui()

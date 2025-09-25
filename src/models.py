@@ -22,6 +22,11 @@ class Model:
         draw_model(self.model, self.position, self.size, WHITE)
 
 
+class Skycraper(Model):
+    def __init__(self, model, position):
+        super().__init__(model, 0, position, Vector3())
+
+
 class Fog(Model):
     def __init__(self, camera, size=50, segments=50):
         mesh = gen_mesh_plane(size, size, segments, segments)
