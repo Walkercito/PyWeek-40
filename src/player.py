@@ -1,5 +1,6 @@
 from settings import *
 from models import Model
+from custom_timer import Timer
 
 
 class Player(Model):
@@ -38,6 +39,10 @@ class Player(Model):
         self.boost_speed_multiplier = 1.8
         self.boost_recharge_rate = 1.0 
         self.boost_depletion_rate = 1.0 
+        
+        self.boost_drained_timer = Timer(2.0)
+        self.show_boost_drained_message = False
+
 
     def start_invulnerability(self, reason="collision"):
         if self.is_invulnerable:
@@ -54,6 +59,7 @@ class Player(Model):
         self.position = Vector3(self.spawn_position.x, self.spawn_position.y, self.spawn_position.z)
         self.velocity = Vector3(0, 0, 0)
 
+
     def end_invulnerability(self):
         self.is_invulnerable = False
         self.is_visible = True
@@ -61,6 +67,7 @@ class Player(Model):
         self.flash_timer.deactivate()
         if DEBUG:
             print("Invulnerability ended - Player vulnerable again!")
+
 
     def update_invulnerability(self):
         if not self.is_invulnerable:
@@ -76,6 +83,7 @@ class Player(Model):
         if not self.invulnerability_timer:
             self.end_invulnerability()
 
+
     def check_fog_collision(self):
         if self.is_invulnerable:
             return False
@@ -84,6 +92,7 @@ class Player(Model):
             self.start_invulnerability("fog collision")
             return True
         return False
+
 
     def get_rotated_bbox_corners(self):
         # corners of the 8 bboxs
@@ -126,6 +135,7 @@ class Player(Model):
             Vector3(max_x, max_y, max_z)
         )
 
+
     def check_collision_with(self, other_model):
         """Collision check - does not collide if invulnerable"""
         if not self.has_collision or not other_model.has_collision or self.is_invulnerable:
@@ -148,6 +158,7 @@ class Player(Model):
             return check_collision_boxes(my_box, other_box)
         
         return False
+
 
     def draw_debug_oriented_box(self):
         if not DEBUG or not hasattr(self, '_show_oriented_debug') or not self._show_oriented_debug:
@@ -177,6 +188,7 @@ class Player(Model):
         draw_line_3d(corners[2], corners[6], box_color)
         draw_line_3d(corners[3], corners[7], box_color)
 
+
     def input(self, forward_vector):
         move_amount = int(is_key_down(KEY_W)) - int(is_key_down(KEY_S))
         self.target_direction = vector3_scale(forward_vector, move_amount)
@@ -204,24 +216,49 @@ class Player(Model):
         self.velocity = vector3_subtract(self.velocity, drag_force)
         self.position = vector3_add(self.position, vector3_scale(self.velocity, dt))
 
+
     def update_boost(self, dt):
         if self.is_boosting:
             self.current_boost_time -= self.boost_depletion_rate * dt
-            if self.current_boost_time < 0:
+            if self.current_boost_time <= 0:
                 self.current_boost_time = 0
-                self.is_boosting = False 
+                self.is_boosting = False
+                if not self.show_boost_drained_message:
+                    self.start_boost_drained_message()
         else:
             if self.current_boost_time < self.max_boost_time:
                 self.current_boost_time += self.boost_recharge_rate * dt
                 if self.current_boost_time > self.max_boost_time:
                     self.current_boost_time = self.max_boost_time
 
+
     def apply_upward_boost(self, boost_force: float):
         self.velocity.y += boost_force
 
 
+    def start_boost_drained_message(self):
+        self.show_boost_drained_message = True
+        self.boost_drained_timer.activate()
+
+
+    def end_boost_drained_message(self):
+        self.show_boost_drained_message = False
+        self.boost_drained_timer.deactivate()
+
+
+    def update_boost_drained_message(self):
+        if not self.show_boost_drained_message:
+            return
+            
+        self.boost_drained_timer.update()
+        
+        if not self.boost_drained_timer:
+            self.end_boost_drained_message()
+
+
     def update(self, dt, forward_vector, mouse_dx):
         self.update_invulnerability()
+        self.update_boost_drained_message()
         self.check_fog_collision()
         
         self.input(forward_vector)
@@ -260,11 +297,13 @@ class Player(Model):
                 0.0,               0.0,           0.0,          1.0
             )
 
+
     def draw(self):
         if self.is_visible:
             draw_model(self.model, Vector3(0, 0, 0), 1.0, WHITE)
         
         self.draw_debug_oriented_box()
+
 
     def draw_hud(self, camera_pitch, camera_yaw, is_warning_active=False):
         center_x = SCREEN_WIDTH // 2
@@ -389,3 +428,11 @@ class Player(Model):
             inv_text = f"INVULNERABLE: {remaining_time:.1f}s"
             text_width = measure_text(inv_text, 20)
             draw_text(inv_text, center_x - text_width // 2, center_y + 80, 20, PURPLE)
+        
+        if self.show_boost_drained_message:
+            alpha = int(abs(sin(get_time() * 10)) * 255)
+            warning_color = Color(255, 255, 0, alpha) # yellow
+
+            boost_text = "BOOST DRAINED!"
+            text_width = measure_text(boost_text, 30)
+            draw_text(boost_text, center_x - text_width // 2, center_y + 120, 30, warning_color)

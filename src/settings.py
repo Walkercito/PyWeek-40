@@ -14,4 +14,4 @@ FPS = 60
 FONT_SIZE = 60
 FONT_PADDING = 20
 
-DEBUG = True
+DEBUG = False
