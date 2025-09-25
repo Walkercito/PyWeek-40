@@ -1,7 +1,6 @@
 from settings import *
 
 
-
 class Model:
     def __init__(self, model, speed, position, direction = Vector3()):
         self.model = model
@@ -9,6 +8,56 @@ class Model:
         self.position = position
         self.direction = direction
         self.size = 1
+        
+        # collision system
+        self.collision_box = BoundingBox(
+            Vector3(-1, -1, -1),  # min
+            Vector3(1, 1, 1)      # max
+        )
+        self.has_collision = True  # for simple models
+        self.has_multiple_collision_boxes = False  # for complex models
+
+    def get_world_bounding_box(self):
+        if not self.has_collision:
+            return None
+            
+        min_point = Vector3(
+            self.position.x + (self.collision_box.min.x * self.size),
+            self.position.y + (self.collision_box.min.y * self.size),
+            self.position.z + (self.collision_box.min.z * self.size)
+        )
+        max_point = Vector3(
+            self.position.x + (self.collision_box.max.x * self.size),
+            self.position.y + (self.collision_box.max.y * self.size),
+            self.position.z + (self.collision_box.max.z * self.size)
+        )
+        
+        return BoundingBox(min_point, max_point)
+
+    def check_collision_with(self, other_model):
+        if not self.has_collision or not other_model.has_collision:
+            return False
+        
+        if hasattr(other_model, 'has_multiple_collision_boxes') and other_model.has_multiple_collision_boxes:
+            other_boxes = other_model.get_world_bounding_boxes()
+            my_box = self.get_world_bounding_box()
+            
+            if my_box is None:
+                return False
+                
+            for other_box in other_boxes:
+                if check_collision_boxes(my_box, other_box):
+                    return True
+        else:
+            my_box = self.get_world_bounding_box()
+            other_box = other_model.get_world_bounding_box()
+            
+            if my_box is None or other_box is None:
+                return False
+                
+            return check_collision_boxes(my_box, other_box)
+        
+        return False
 
     def move(self, dt):
         self.position.x += self.speed * self.direction.x * dt
@@ -25,6 +74,97 @@ class Model:
 class Skycraper(Model):
     def __init__(self, model, position):
         super().__init__(model, 0, position, Vector3())
+        self.collision_box = BoundingBox(
+            Vector3(-2, -5, -2),   # min
+            Vector3(2, 15, 2)      # max
+        )
+
+
+class SkycraperMultipleLayer(Model):
+    """SkycraperMultipleLayer with exact dimensions from the model
+    
+    Original measurements from Blender:
+    - base: X 30.2m, Y 30.2m, Z 67.6m
+    - second floor: X 21.14m, Y 21.14m, Z 26.4m  
+    - antenna: X 2.8359m, Y 2.81107m, Z 34.9m
+    """
+    def __init__(self, model, position):
+        super().__init__(model, 0, position, Vector3())
+        
+        # blender: X=width, Y=depth, Z=height
+        # raylib: X=width, Y=height, Z=depth
+        
+        self.collision_boxes = [
+            # base: 30.2m x 30.2m x 67.6m 
+            BoundingBox(
+                Vector3(-15.1, -5, -15.1),
+                Vector3(15.1, 67.6, 15.1)  
+            ),
+            
+            # second floor: 21.14m x 21.14m x 26.4m 
+            # starts where first floor ends (Y=67.6)
+            BoundingBox(
+                Vector3(-10.57, 67.6, -10.57), 
+                Vector3(10.57, 94.0, 10.57)
+            ),
+            
+            # antenna: 2.84m x 2.81m x 34.9m
+            # starts where second floor ends (Y=94.0)
+            BoundingBox(
+                Vector3(-1.42, 94.0, -1.41), 
+                Vector3(1.42, 128.9, 1.41) 
+            )
+        ]
+        
+        self.has_multiple_collision_boxes = True
+    
+
+    def get_world_bounding_boxes(self):
+        if not self.has_collision:
+            return []
+            
+        world_boxes = []
+        for box in self.collision_boxes:
+            min_point = Vector3(
+                self.position.x + (box.min.x * self.size),
+                self.position.y + (box.min.y * self.size),
+                self.position.z + (box.min.z * self.size)
+            )
+            max_point = Vector3(
+                self.position.x + (box.max.x * self.size),
+                self.position.y + (box.max.y * self.size),
+                self.position.z + (box.max.z * self.size)
+            )
+            world_boxes.append(BoundingBox(min_point, max_point))
+        
+        return world_boxes
+    
+
+    def check_collision_with(self, other_model):
+        if not self.has_collision or not other_model.has_collision:
+            return False
+
+        # complex model
+        if hasattr(other_model, 'get_world_bounding_boxes'):
+            other_boxes = other_model.get_world_bounding_boxes()
+            my_boxes = self.get_world_bounding_boxes()
+            
+            for my_box in my_boxes:
+                for other_box in other_boxes:
+                    if check_collision_boxes(my_box, other_box):
+                        return True
+        else:
+            # simple model
+            other_box = other_model.get_world_bounding_box()
+            if other_box is None:
+                return False
+                
+            my_boxes = self.get_world_bounding_boxes()
+            for my_box in my_boxes:
+                if check_collision_boxes(my_box, other_box):
+                    return True
+        
+        return False
 
 
 class Fog(Model):
@@ -72,6 +212,8 @@ class Fog(Model):
         self.camera = camera
 
         super().__init__(model, 0, Vector3(0, 0, 0), Vector3())
+
+        self.has_collision = False
 
         if self.shader_loaded:
             self.model.materials[0].shader = self.shader
@@ -141,5 +283,3 @@ class Fog(Model):
     def __del__(self):
         if hasattr(self, 'shader') and self.shader is not None:
             unload_shader(self.shader)
-
-
