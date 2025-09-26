@@ -1,7 +1,7 @@
 from settings import * 
 
 from player import Player
-from models import Fog, Skycraper, SkycraperMultipleLayer
+from models import Fog, SkycraperMultipleLayer, SkyscraperSimple
 from bullet import BulletManager
 from skybox import Skybox
 
@@ -72,6 +72,9 @@ class Game:
         
         self.skyscraper_complex = SkycraperMultipleLayer(self.models["skyscraper01"], Vector3(0, -10, 50))
         self.collidable_objects.append(self.skyscraper_complex)
+
+        self.skycraper_simple = SkyscraperSimple(self.models["skyscraper02"], Vector3(0, -14.8, -50))
+        self.collidable_objects.append(self.skycraper_simple)
 
         self.show_debug_boxes = False
         self.show_oriented_debug = False

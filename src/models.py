@@ -71,13 +71,23 @@ class Model:
         draw_model(self.model, self.position, self.size, WHITE)
 
 
-class Skycraper(Model):
+class SkyscraperSimple(Model):
+    """SkyscraperSimple with exact dimensions from the model
+    
+    Original measurements from Blender:
+    - X: 40.8741m (width), Y: 22.88m (depth), Z: 70.4m (height)
+    """
     def __init__(self, model, position):
         super().__init__(model, 0, position, Vector3())
+        
+        # Blender: X=width, Y=depth, Z=height
+        # Raylib: X=width, Y=height, Z=depth
         self.collision_box = BoundingBox(
-            Vector3(-2, -5, -2),   # min
-            Vector3(2, 15, 2)      # max
+            Vector3(-20.43705, -5, -11.44),  
+            Vector3(20.43705, 70.4, 11.44)  
         )
+        self.has_collision = True
+        self.has_multiple_collision_boxes = False
 
 
 class SkycraperMultipleLayer(Model):
