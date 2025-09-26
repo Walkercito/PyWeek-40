@@ -6,7 +6,7 @@ from custom_timer import Timer
 class Player(Model):
     """Player class with its own UI"""
     def __init__(self, model):
-        super().__init__(model = model, speed = 25, position = Vector3(0, 15, 0))
+        super().__init__(model = model, speed = 25, position = Vector3(0, 35, 0))
         self.model.transform = matrix_identity()
         
         self.collision_box = BoundingBox(
@@ -29,7 +29,7 @@ class Player(Model):
         self.invulnerability_timer = Timer(2.0) 
         self.flash_timer = Timer(0.1, repeat=True)
         self.is_visible = True
-        self.spawn_position = Vector3(0, 15, 0)
+        self.spawn_position = Vector3(0, 35, 0)
         self.FOG_COLLISION_Y = 5.0 
 
         self.is_boosting = False

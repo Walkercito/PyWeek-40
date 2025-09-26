@@ -2,11 +2,12 @@ from settings import *
 
 
 class Model:
-    def __init__(self, model, speed, position, direction = Vector3()):
+    def __init__(self, model, speed, position, direction = Vector3(), rotation_angle=0.0):
         self.model = model
         self.speed = speed
         self.position = position
         self.direction = direction
+        self.rotation_angle = rotation_angle
         self.size = 1
         
         # collision system
@@ -20,19 +21,29 @@ class Model:
     def get_world_bounding_box(self):
         if not self.has_collision:
             return None
-            
-        min_point = Vector3(
-            self.position.x + (self.collision_box.min.x * self.size),
-            self.position.y + (self.collision_box.min.y * self.size),
-            self.position.z + (self.collision_box.min.z * self.size)
-        )
-        max_point = Vector3(
-            self.position.x + (self.collision_box.max.x * self.size),
-            self.position.y + (self.collision_box.max.y * self.size),
-            self.position.z + (self.collision_box.max.z * self.size)
+
+        transform_matrix = matrix_multiply(
+            matrix_rotate_y(radians(self.rotation_angle)),
+            matrix_translate(self.position.x, self.position.y, self.position.z)
         )
         
-        return BoundingBox(min_point, max_point)
+        local_corners = [
+            Vector3(self.collision_box.min.x * self.size, self.collision_box.min.y * self.size, self.collision_box.min.z * self.size),
+            Vector3(self.collision_box.max.x * self.size, self.collision_box.min.y * self.size, self.collision_box.min.z * self.size),
+            Vector3(self.collision_box.min.x * self.size, self.collision_box.max.y * self.size, self.collision_box.min.z * self.size),
+            Vector3(self.collision_box.max.x * self.size, self.collision_box.max.y * self.size, self.collision_box.min.z * self.size),
+            Vector3(self.collision_box.min.x * self.size, self.collision_box.min.y * self.size, self.collision_box.max.z * self.size),
+            Vector3(self.collision_box.max.x * self.size, self.collision_box.min.y * self.size, self.collision_box.max.z * self.size),
+            Vector3(self.collision_box.min.x * self.size, self.collision_box.max.y * self.size, self.collision_box.max.z * self.size),
+            Vector3(self.collision_box.max.x * self.size, self.collision_box.max.y * self.size, self.collision_box.max.z * self.size)
+        ]
+
+        world_corners = [vector3_transform(corner, transform_matrix) for corner in local_corners]
+        
+        min_p = Vector3(min(c.x for c in world_corners), min(c.y for c in world_corners), min(c.z for c in world_corners))
+        max_p = Vector3(max(c.x for c in world_corners), max(c.y for c in world_corners), max(c.z for c in world_corners))
+
+        return BoundingBox(min_p, max_p)
 
     def check_collision_with(self, other_model):
         if not self.has_collision or not other_model.has_collision:
@@ -68,7 +79,7 @@ class Model:
         self.move(dt)
     
     def draw(self):
-        draw_model(self.model, self.position, self.size, WHITE)
+        draw_model_ex(self.model, self.position, Vector3(0, 1, 0), self.rotation_angle, Vector3(self.size, self.size, self.size), WHITE)
 
 
 class SkyscraperSimple(Model):
@@ -77,9 +88,8 @@ class SkyscraperSimple(Model):
     Original measurements from Blender:
     - X: 40.8741m (width), Y: 22.88m (depth), Z: 70.4m (height)
     """
-    def __init__(self, model, position):
-        super().__init__(model, 0, position, Vector3())
-        
+    def __init__(self, model, position, rotation_angle=0.0):
+        super().__init__(model, 0, position, Vector3(), rotation_angle=rotation_angle)
         # Blender: X=width, Y=depth, Z=height
         # Raylib: X=width, Y=height, Z=depth
         self.collision_box = BoundingBox(
@@ -98,12 +108,10 @@ class SkycraperMultipleLayer(Model):
     - second floor: X 21.14m, Y 21.14m, Z 26.4m  
     - antenna: X 2.8359m, Y 2.81107m, Z 34.9m
     """
-    def __init__(self, model, position):
-        super().__init__(model, 0, position, Vector3())
-        
+    def __init__(self, model, position, rotation_angle=0.0):
+        super().__init__(model, 0, position, Vector3(), rotation_angle=rotation_angle)
         # blender: X=width, Y=depth, Z=height
         # raylib: X=width, Y=height, Z=depth
-        
         self.collision_boxes = [
             # base: 30.2m x 30.2m x 67.6m 
             BoundingBox(
@@ -117,7 +125,7 @@ class SkycraperMultipleLayer(Model):
                 Vector3(-10.57, 67.6, -10.57), 
                 Vector3(10.57, 94.0, 10.57)
             ),
-            
+
             # antenna: 2.84m x 2.81m x 34.9m
             # starts where second floor ends (Y=94.0)
             BoundingBox(
@@ -134,48 +142,32 @@ class SkycraperMultipleLayer(Model):
             return []
             
         world_boxes = []
+        transform_matrix = matrix_multiply(
+            matrix_rotate_y(radians(self.rotation_angle)),
+            matrix_translate(self.position.x, self.position.y, self.position.z)
+        )
+
         for box in self.collision_boxes:
-            min_point = Vector3(
-                self.position.x + (box.min.x * self.size),
-                self.position.y + (box.min.y * self.size),
-                self.position.z + (box.min.z * self.size)
-            )
-            max_point = Vector3(
-                self.position.x + (box.max.x * self.size),
-                self.position.y + (box.max.y * self.size),
-                self.position.z + (box.max.z * self.size)
-            )
-            world_boxes.append(BoundingBox(min_point, max_point))
+            local_corners = [
+                Vector3(box.min.x * self.size, box.min.y * self.size, box.min.z * self.size),
+                Vector3(box.max.x * self.size, box.min.y * self.size, box.min.z * self.size),
+                Vector3(box.min.x * self.size, box.max.y * self.size, box.min.z * self.size),
+                Vector3(box.max.x * self.size, box.max.y * self.size, box.min.z * self.size),
+                Vector3(box.min.x * self.size, box.min.y * self.size, box.max.z * self.size),
+                Vector3(box.max.x * self.size, box.min.y * self.size, box.max.z * self.size),
+                Vector3(box.min.x * self.size, box.max.y * self.size, box.max.z * self.size),
+                Vector3(box.max.x * self.size, box.max.y * self.size, box.max.z * self.size)
+            ]
+            
+            world_corners = [vector3_transform(corner, transform_matrix) for corner in local_corners]
+            
+            min_p = Vector3(min(c.x for c in world_corners), min(c.y for c in world_corners), min(c.z for c in world_corners))
+            max_p = Vector3(max(c.x for c in world_corners), max(c.y for c in world_corners), max(c.z for c in world_corners))
+            
+            world_boxes.append(BoundingBox(min_p, max_p))
         
         return world_boxes
     
-
-    def check_collision_with(self, other_model):
-        if not self.has_collision or not other_model.has_collision:
-            return False
-
-        # complex model
-        if hasattr(other_model, 'get_world_bounding_boxes'):
-            other_boxes = other_model.get_world_bounding_boxes()
-            my_boxes = self.get_world_bounding_boxes()
-            
-            for my_box in my_boxes:
-                for other_box in other_boxes:
-                    if check_collision_boxes(my_box, other_box):
-                        return True
-        else:
-            # simple model
-            other_box = other_model.get_world_bounding_box()
-            if other_box is None:
-                return False
-                
-            my_boxes = self.get_world_bounding_boxes()
-            for my_box in my_boxes:
-                if check_collision_boxes(my_box, other_box):
-                    return True
-        
-        return False
-
 
 class Fog(Model):
     def __init__(self, camera, size=50, segments=50):
@@ -198,7 +190,6 @@ class Fog(Model):
                 self.shader_loaded = True
                 print("[*] Shaders loaded successfully")
                 
-                # get uniforms locations
                 self.time_loc = get_shader_location(self.shader, "time")
                 self.view_pos_loc = get_shader_location(self.shader, "viewPos")
                 self.fog_density_loc = get_shader_location(self.shader, "fogDensity")
@@ -212,7 +203,6 @@ class Fog(Model):
                 self.shader_loaded = False
                 self.shader = None
         
-        # fog parameters
         self.fog_density = 0.8
         self.fog_speed = 0.5
         self.fog_scale = 4.0
