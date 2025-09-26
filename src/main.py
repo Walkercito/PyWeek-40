@@ -2,6 +2,7 @@ from settings import *
 
 from player import Player
 from models import Fog, Skycraper, SkycraperMultipleLayer
+from bullet import BulletManager
 
 
 class Game:
@@ -24,7 +25,7 @@ class Game:
         self.camera_yaw = 0.0 
         self.camera_pitch = 0.2
         self.camera_distance = 15.0 
-        self.camera_target_offset = Vector3(0, 3.0, 0) 
+        self.camera_target_offset = Vector3(0, 1.0, 0)
         self.camera_smooth_factor = 5.0
 
         self.warning_sound_timer = Timer(1.0)
@@ -48,7 +49,12 @@ class Game:
             height=8.0, color=Vector3(0.6, 0.8, 1.0)
         )
 
-        self.player = Player(self.models["player"], self.shoot)
+        self.bullet_manager = BulletManager()
+        self.current_bullet_type = "normal"
+        self.shoot_cooldown = Timer(0.02) 
+        self.is_shooting = False
+
+        self.player = Player(self.models["player"])
         self.camera.position = Vector3(self.player.position.x, self.player.position.y + 10, self.player.position.z + self.camera_distance)
         self.camera.target = vector3_add(self.player.position, self.camera_target_offset)
 
@@ -68,17 +74,45 @@ class Game:
             "skyscraper02": load_model(join("assets", "models", "buildings", "2.glb"))
         }
         self.audio = {
-            "warning": load_sound(join("assets", "audio", "beep-warning.mp3"))
+            "warning": load_sound(join("assets", "audio", "beep-warning.mp3")),
         }
     
 
-    def shoot(self, position):
+    def shoot(self, position, forward_vector):
+        if self.shoot_cooldown: 
+            return
+            
+        shoot_direction = vector3_normalize(forward_vector)
+        offset = vector3_scale(shoot_direction, 2.5)
+        shoot_position = vector3_add(position, offset)
+
+        bullet = self.bullet_manager.add_bullet(shoot_position, shoot_direction, self.current_bullet_type)
+        
+        self.shoot_cooldown.activate()
+        # TODO: add a sound
+
         if DEBUG:
-            print("Shoot!")
+            print(f"Fired {self.current_bullet_type} bullet! Active bullets: {self.bullet_manager.get_bullet_count()}")
 
 
     def cycle_fog_color(self):
         self.current_color_index = (self.current_color_index + 1) % len(self.base_colors)
+
+
+    def handle_shooting(self, player_forward_vector):
+        self.is_shooting = is_mouse_button_down(MOUSE_BUTTON_LEFT)
+
+        if self.is_shooting and not self.shoot_cooldown:
+            self.shoot(self.player.position, player_forward_vector)
+
+
+    def handle_weapon_switching(self):
+        if is_key_pressed(KEY_ONE):
+            self.current_bullet_type = "normal"
+        elif is_key_pressed(KEY_TWO):
+            self.current_bullet_type = "heavy"
+        elif is_key_pressed(KEY_THREE):
+            self.current_bullet_type = "rapid"
 
 
     def check_collisions(self):
@@ -174,6 +208,7 @@ class Game:
 
         self.warning_sound_timer.update()
         self.camera_shake_timer.update()
+        self.shoot_cooldown.update() 
 
         self.camera_yaw -= mouse_delta.x * MOUSE_SENSITIVITY
         self.camera_pitch -= mouse_delta.y * MOUSE_SENSITIVITY
@@ -184,7 +219,11 @@ class Game:
         player_forward_z = -cos(self.camera_yaw) * cos(self.camera_pitch)
         player_forward_vector = vector3_normalize(Vector3(player_forward_x, player_forward_y, player_forward_z))
 
+        self.handle_shooting(player_forward_vector)
+
         self.player.update(dt, player_forward_vector, mouse_delta.x)
+
+        self.bullet_manager.update(dt, self.collidable_objects)
 
         self.check_collisions()
         
@@ -248,6 +287,8 @@ class Game:
             if is_key_pressed(KEY_I):
                 if not self.player.is_invulnerable:
                     self.player.start_invulnerability("manual test")
+            if is_key_pressed(KEY_C):
+                self.bullet_manager.clear_all()
 
 
     def draw(self):
@@ -261,6 +302,8 @@ class Game:
         for obj in self.collidable_objects:
             obj.draw()
 
+        self.bullet_manager.draw()
+
         if DEBUG:
             self.draw_debug_boxes()
 
@@ -272,6 +315,22 @@ class Game:
     def draw_ui(self):
         draw_text(f"FPS: {get_fps()}", 10, 10, 20, Color(50, 255, 150, 255))
         self.player.draw_hud(self.camera_pitch, self.camera_yaw, self.show_altitude_warning)
+
+        weapon_info = f"Weapon: {self.current_bullet_type.upper()}"
+        draw_text(weapon_info, SCREEN_WIDTH - 300, 10, 20, Color(255, 255, 0, 255))
+        
+        bullet_count = f"Bullets: {self.bullet_manager.get_bullet_count()}"
+        draw_text(bullet_count, SCREEN_WIDTH - 300, 35, 16, Color(200, 200, 200, 255))
+
+        if self.is_shooting:
+            shooting_text = "FIRING..."
+            draw_text(shooting_text, SCREEN_WIDTH - 300, 60, 14, Color(255, 255, 100, 255))
+        elif self.shoot_cooldown:
+            cooldown_text = "RELOADING..."
+            draw_text(cooldown_text, SCREEN_WIDTH - 300, 60, 14, Color(255, 100, 100, 255))
+        else:
+            ready_text = "READY"
+            draw_text(ready_text, SCREEN_WIDTH - 300, 60, 14, Color(100, 255, 100, 255))
 
         if self.show_altitude_warning:
             alpha = int(abs(sin(get_time() * 10)) * 255)
@@ -292,11 +351,13 @@ class Game:
             if self.show_oriented_debug:
                 draw_text("DEBUG: Oriented Box ON", 10, 110, 20, LIME)
                 draw_text("GREEN=Vulnerable, PURPLE=Invulnerable - Rotating", 10, 135, 14, WHITE)
-            draw_text("DEBUG CONTROLS:", 10, SCREEN_HEIGHT - 140, 16, YELLOW)
-            draw_text("[G] to generate precise city", 10, SCREEN_HEIGHT - 120, 14, WHITE)
-            draw_text("[B] to toggle AABB boxes", 10, SCREEN_HEIGHT - 100, 14, WHITE)
-            draw_text("[V] to toggle oriented plane box", 10, SCREEN_HEIGHT - 80, 14, WHITE)
-            draw_text("[I] to test invulnerability", 10, SCREEN_HEIGHT - 60, 14, WHITE)
+            draw_text("DEBUG CONTROLS:", 10, SCREEN_HEIGHT - 200, 16, YELLOW)
+            draw_text("[LEFT CLICK] to shoot (hold for continuous)", 10, SCREEN_HEIGHT - 180, 14, WHITE)
+            draw_text("[G] to generate precise city", 10, SCREEN_HEIGHT - 160, 14, WHITE)
+            draw_text("[B] to toggle AABB boxes", 10, SCREEN_HEIGHT - 140, 14, WHITE)
+            draw_text("[V] to toggle oriented plane box", 10, SCREEN_HEIGHT - 120, 14, WHITE)
+            draw_text("[I] to test invulnerability", 10, SCREEN_HEIGHT - 100, 14, WHITE)
+            draw_text("[C] to clear all bullets", 10, SCREEN_HEIGHT - 80, 14, WHITE)
             precise_buildings = sum(1 for obj in self.collidable_objects if hasattr(obj, 'has_multiple_collision_boxes') and obj.has_multiple_collision_boxes)
             draw_text(f"Buildings: {len(self.collidable_objects)} (Multi-layer: {precise_buildings})", 10, SCREEN_HEIGHT - 40, 14, WHITE)
 

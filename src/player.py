@@ -5,9 +5,8 @@ from custom_timer import Timer
 
 class Player(Model):
     """Player class with its own UI"""
-    def __init__(self, model, shoot_func):
+    def __init__(self, model):
         super().__init__(model = model, speed = 25, position = Vector3(0, 15, 0))
-        self.shoot_func = shoot_func
         self.model.transform = matrix_identity()
         
         self.collision_box = BoundingBox(
@@ -193,9 +192,6 @@ class Player(Model):
         move_amount = int(is_key_down(KEY_W)) - int(is_key_down(KEY_S))
         self.target_direction = vector3_scale(forward_vector, move_amount)
 
-        if is_key_pressed(KEY_ENTER):
-            self.shoot_func(self.position)
-
         if is_key_down(KEY_LEFT_SHIFT):                       # just stop the player from abusing the boost
             if not self.is_boosting:
                 boost_ratio = self.current_boost_time / self.max_boost_time
@@ -319,11 +315,13 @@ class Player(Model):
 
         pitch_scale = 150
         vertical_offset = camera_pitch * pitch_scale
-        roll_rad = -self.roll_angle
+        roll_rad = self.roll_angle  
         
-        draw_circle(center_x, center_y, 3, final_hud_color)
-        draw_line_ex(Vector2(center_x - 10, center_y), Vector2(center_x - 25, center_y), 2, final_hud_color)
-        draw_line_ex(Vector2(center_x + 10, center_y), Vector2(center_x + 25, center_y), 2, final_hud_color)
+        draw_circle(center_x, center_y, 4, final_hud_color)
+        draw_line_ex(Vector2(center_x - 15, center_y), Vector2(center_x - 30, center_y), 3, final_hud_color)
+        draw_line_ex(Vector2(center_x + 15, center_y), Vector2(center_x + 30, center_y), 3, final_hud_color)
+        draw_line_ex(Vector2(center_x, center_y - 15), Vector2(center_x, center_y - 30), 3, final_hud_color)
+        draw_line_ex(Vector2(center_x, center_y + 15), Vector2(center_x, center_y + 30), 3, final_hud_color)
 
         for i in [-30, 0, 30]:
             line_y_offset = vertical_offset - (radians(i) * pitch_scale)
@@ -387,6 +385,7 @@ class Player(Model):
         draw_rectangle_lines_ex(boost_bar_pos, 2, speedo_color)
 
         bst_text = "BOOST"
+        total_text_height = len(bst_text) * font_size + (len(bst_text) - 1) * char_spacing
         y_start_bst = boost_bar_pos.y + (boost_bar_pos.height - total_text_height) / 2
         x_pos_bst = boost_bar_pos.x + boost_bar_pos.width + 15
 
