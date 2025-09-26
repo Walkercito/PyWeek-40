@@ -42,6 +42,24 @@ class Player(Model):
         self.boost_drained_timer = Timer(2.0)
         self.show_boost_drained_message = False
 
+        self.max_health = PLAYER_MAX_HEALTH
+        self.health = self.max_health
+
+
+    def take_damage(self, amount):
+        if self.is_invulnerable:
+            return
+        self.health -= amount
+        if self.health < 0:
+            self.health = 0
+        
+        if DEBUG:
+            print(f"Player took {amount} damage, {self.health} HP remaining.")
+        
+        if self.health <= 0:
+            self.start_invulnerability("Fatal damage")
+            self.health = self.max_health
+
 
     def start_invulnerability(self, reason="collision"):
         if self.is_invulnerable:
@@ -301,7 +319,7 @@ class Player(Model):
         self.draw_debug_oriented_box()
 
 
-    def draw_hud(self, camera_pitch, camera_yaw, is_warning_active=False):
+    def draw_hud(self, camera_pitch, camera_yaw, is_warning_active=False, weapon_heat_ratio=0.0, is_overheated=False):
         center_x = SCREEN_WIDTH // 2
         center_y = SCREEN_HEIGHT // 2
 
@@ -332,6 +350,9 @@ class Player(Model):
             start_pos = vector2_add(vector2_rotate(Vector2(-line_half_width, 0), roll_rad), Vector2(center_x, center_y + line_y_offset))
             end_pos = vector2_add(vector2_rotate(Vector2(line_half_width, 0), roll_rad), Vector2(center_x, center_y + line_y_offset))
             draw_line_ex(start_pos, end_pos, line_thickness, line_color)
+        
+        font_size = 20
+        char_spacing = 5
 
         # speedometer
         speed_bar_pos = Rectangle(40, center_y - 100, 20, 200)
@@ -349,29 +370,19 @@ class Player(Model):
         draw_line(int(speed_bar_pos.x), int(marker_y), int(speed_bar_pos.x + speed_bar_pos.width), int(marker_y), WHITE)
         
         spd_text = "SPEED"
-        font_size = 20
-        char_spacing = 5 
-        total_text_height = len(spd_text) * font_size + (len(spd_text) - 1) * char_spacing
-        y_start_spd = speed_bar_pos.y + (speed_bar_pos.height - total_text_height) / 2
+        total_text_height_spd = len(spd_text) * font_size + (len(spd_text) - 1) * char_spacing
+        y_start_spd = speed_bar_pos.y + (speed_bar_pos.height - total_text_height_spd) / 2
         x_pos_spd = speed_bar_pos.x - 25
-
         for i, char in enumerate(spd_text):
             char_width = measure_text(char, font_size)
             draw_text(char, int(x_pos_spd - char_width / 2), int(y_start_spd + i * (font_size + char_spacing)), font_size, speedo_color)
-        
-        
+
         speed_value_text = f"{int(current_speed_val)}"
         speed_text_width = measure_text(speed_value_text, 20)
-        draw_text(
-            speed_value_text, 
-            int(speed_bar_pos.x + speed_bar_pos.width / 2 - speed_text_width / 2), 
-            int(speed_bar_pos.y + speed_bar_pos.height + 10), 
-            20, 
-            speedo_color
-        )
+        draw_text(speed_value_text, int(speed_bar_pos.x + speed_bar_pos.width / 2 - speed_text_width / 2), int(speed_bar_pos.y + speed_bar_pos.height + 10), 20, speedo_color)
         
-        # boost bar
-        boost_bar_pos = Rectangle(80, center_y - 100, 20, 200)
+        # Boost bar
+        boost_bar_pos = Rectangle(70, center_y - 100, 20, 200)
         boost_ratio = self.current_boost_time / self.max_boost_time
 
         if boost_ratio > 0.5: boost_color = speedo_color
@@ -385,16 +396,57 @@ class Player(Model):
         draw_rectangle_lines_ex(boost_bar_pos, 2, speedo_color)
 
         bst_text = "BOOST"
-        total_text_height = len(bst_text) * font_size + (len(bst_text) - 1) * char_spacing
-        y_start_bst = boost_bar_pos.y + (boost_bar_pos.height - total_text_height) / 2
+        total_text_height_bst = len(bst_text) * font_size + (len(bst_text) - 1) * char_spacing
+        y_start_bst = boost_bar_pos.y + (boost_bar_pos.height - total_text_height_bst) / 2
         x_pos_bst = boost_bar_pos.x + boost_bar_pos.width + 15
-
         for i, char in enumerate(bst_text):
             char_width = measure_text(char, font_size)
             draw_text(char, int(x_pos_bst - char_width / 2), int(y_start_bst + i * (font_size + char_spacing)), font_size, speedo_color)
 
+        # weapon heat bar
+        heat_bar_pos = Rectangle(SCREEN_WIDTH - 110, center_y - 100, 20, 200)
+        heat_color = speedo_color
+        if weapon_heat_ratio > 0.5: heat_color = YELLOW
+        if weapon_heat_ratio > 0.8: heat_color = RED
+        if is_overheated:
+            alpha = int(abs(sin(get_time() * 10)) * 255)
+            heat_color = Color(255, 50, 50, alpha)
+
+        draw_rectangle_rec(heat_bar_pos, fade(BLACK, 0.5))
+        fill_height_heat = heat_bar_pos.height * weapon_heat_ratio
+        draw_rectangle(int(heat_bar_pos.x), int(heat_bar_pos.y + heat_bar_pos.height - fill_height_heat), int(heat_bar_pos.width), int(fill_height_heat), heat_color)
+        draw_rectangle_lines_ex(heat_bar_pos, 2, speedo_color)
+
+        heat_text = "HEAT"
+        total_text_height_heat = len(heat_text) * font_size + (len(heat_text) - 1) * char_spacing
+        y_start_heat = heat_bar_pos.y + (heat_bar_pos.height - total_text_height_heat) / 2
+        x_pos_heat = heat_bar_pos.x - 25
+        for i, char in enumerate(heat_text):
+            char_width = measure_text(char, font_size)
+            draw_text(char, int(x_pos_heat - char_width / 2), int(y_start_heat + i * (font_size + char_spacing)), font_size, speedo_color)
         
-        # radar in the bottom right
+        # health bar
+        health_bar_pos = Rectangle(SCREEN_WIDTH - 80, center_y - 100, 20, 200)
+        health_ratio = self.health / self.max_health if self.max_health > 0 else 0
+        health_color = speedo_color
+        if health_ratio < 0.5: health_color = YELLOW
+        if health_ratio < 0.25: health_color = RED
+        if self.is_invulnerable: health_color = PURPLE
+
+        draw_rectangle_rec(health_bar_pos, fade(BLACK, 0.5))
+        fill_height_health = health_bar_pos.height * health_ratio
+        draw_rectangle(int(health_bar_pos.x), int(health_bar_pos.y + health_bar_pos.height - fill_height_health), int(health_bar_pos.width), int(fill_height_health), health_color)
+        draw_rectangle_lines_ex(health_bar_pos, 2, speedo_color)
+
+        hp_text = "HP"
+        total_text_height_hp = len(hp_text) * font_size + (len(hp_text) - 1) * char_spacing
+        y_start_hp = health_bar_pos.y + (health_bar_pos.height - total_text_height_hp) / 2
+        x_pos_hp = health_bar_pos.x + health_bar_pos.width + 15
+        for i, char in enumerate(hp_text):
+            char_width = measure_text(char, font_size)
+            draw_text(char, int(x_pos_hp - char_width / 2), int(y_start_hp + i * (font_size + char_spacing)), font_size, speedo_color)
+
+        # radar
         radar_center = Vector2(SCREEN_WIDTH - 130, SCREEN_HEIGHT - 140)
         radar_radius = 100.0
         player_heading_deg = -degrees(camera_yaw)
@@ -418,9 +470,6 @@ class Player(Model):
         rad_text = "In a 320m radius"
         text_width_rad = measure_text(rad_text, 14)
         draw_text(rad_text, int(radar_center.x - text_width_rad/2), int(radar_center.y + radar_radius + 10), 14, final_hud_color)
-
-        
-        # TODO: iterate through enemies here.
 
         if self.is_invulnerable:
             remaining_time = self.invulnerability_timer.duration - (get_time() - self.invulnerability_timer.start_time)

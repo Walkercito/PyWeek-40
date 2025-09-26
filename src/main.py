@@ -3,6 +3,7 @@ from settings import *
 from player import Player
 from models import Fog, Skycraper, SkycraperMultipleLayer
 from bullet import BulletManager
+from skybox import Skybox
 
 
 class Game:
@@ -18,8 +19,8 @@ class Game:
         self.camera.up = Vector3(0.0, 1.0, 0.0) 
         self.camera.projection = CAMERA_PERSPECTIVE
 
-        self.base_fov = 45.0
-        self.boost_fov = 60.0
+        self.base_fov = BASE_FOV
+        self.boost_fov = BOOST_FOV
         self.camera.fovy = self.base_fov
 
         self.camera_yaw = 0.0 
@@ -30,10 +31,10 @@ class Game:
 
         self.warning_sound_timer = Timer(1.0)
         self.camera_shake_timer = Timer(0.3)
-        self.camera_shake_intensity = 0.8
+        self.camera_shake_intensity = CAMERA_SHAKE_INTENSITY
 
         self.show_altitude_warning = False
-        self.ALTITUDE_WARNING_Y = 12.0
+        self.ALTITUDE_WARNING_Y = ALTITUDE_WARNING_Y
 
         self.color_phase = 0.0
         self.current_color_index = 0
@@ -54,6 +55,15 @@ class Game:
         self.shoot_cooldown = Timer(0.02) 
         self.is_shooting = False
 
+        self.weapon_heat = 0.0
+        self.max_weapon_heat = 8.0    
+        self.heat_increase_rate = 1.0 
+        self.heat_decrease_rate = 2.0 
+        self.is_overheated = False
+        
+        self.overheat_message_timer = Timer(2.0)
+        self.show_overheat_message = False
+
         self.player = Player(self.models["player"])
         self.camera.position = Vector3(self.player.position.x, self.player.position.y + 10, self.player.position.z + self.camera_distance)
         self.camera.target = vector3_add(self.player.position, self.camera_target_offset)
@@ -65,6 +75,8 @@ class Game:
 
         self.show_debug_boxes = False
         self.show_oriented_debug = False
+
+        self.skybox = Skybox()
 
 
     def import_assets(self):
@@ -89,10 +101,30 @@ class Game:
         bullet = self.bullet_manager.add_bullet(shoot_position, shoot_direction, self.current_bullet_type)
         
         self.shoot_cooldown.activate()
-        # TODO: add a sound
+        # TODO: add shoot sound
 
         if DEBUG:
             print(f"Fired {self.current_bullet_type} bullet! Active bullets: {self.bullet_manager.get_bullet_count()}")
+
+
+    def start_overheat_message(self):
+        self.show_overheat_message = True
+        self.overheat_message_timer.activate()
+
+
+    def end_overheat_message(self):
+        self.show_overheat_message = False
+        self.overheat_message_timer.deactivate()
+
+
+    def update_overheat_message(self):
+        if not self.show_overheat_message:
+            return
+        
+        self.overheat_message_timer.update()
+        
+        if not self.overheat_message_timer:
+            self.end_overheat_message()
 
 
     def cycle_fog_color(self):
@@ -102,7 +134,7 @@ class Game:
     def handle_shooting(self, player_forward_vector):
         self.is_shooting = is_mouse_button_down(MOUSE_BUTTON_LEFT)
 
-        if self.is_shooting and not self.shoot_cooldown:
+        if self.is_shooting and not self.shoot_cooldown and not self.is_overheated:
             self.shoot(self.player.position, player_forward_vector)
 
 
@@ -127,14 +159,18 @@ class Game:
         if self.player.is_invulnerable:
             return
         
-        if hasattr(collided_object, 'has_multiple_collision_boxes') and collided_object.has_multiple_collision_boxes:
-            collision_part = self.identify_collision_part(collided_object)
-            collision_reason = f"building collision - {collision_part}"
-        else:
-            collision_reason = "building collision"
-        
-        self.player.start_invulnerability(collision_reason)
-        self.camera_shake_timer.activate()
+        is_fatal = (self.player.health - 25) <= 0
+        self.player.take_damage(25)
+
+        if not is_fatal:
+            if hasattr(collided_object, 'has_multiple_collision_boxes') and collided_object.has_multiple_collision_boxes:
+                collision_part = self.identify_collision_part(collided_object)
+                collision_reason = f"building collision - {collision_part}"
+            else:
+                collision_reason = "building collision"
+            
+            self.player.start_invulnerability(collision_reason)
+            self.camera_shake_timer.activate()
 
 
     def identify_collision_part(self, building):
@@ -209,6 +245,7 @@ class Game:
         self.warning_sound_timer.update()
         self.camera_shake_timer.update()
         self.shoot_cooldown.update() 
+        self.update_overheat_message() 
 
         self.camera_yaw -= mouse_delta.x * MOUSE_SENSITIVITY
         self.camera_pitch -= mouse_delta.y * MOUSE_SENSITIVITY
@@ -220,6 +257,23 @@ class Game:
         player_forward_vector = vector3_normalize(Vector3(player_forward_x, player_forward_y, player_forward_z))
 
         self.handle_shooting(player_forward_vector)
+        self.handle_weapon_switching()
+
+
+        if self.is_shooting and not self.is_overheated:
+            self.weapon_heat += self.heat_increase_rate * dt 
+            if self.weapon_heat >= self.max_weapon_heat:
+                self.weapon_heat = self.max_weapon_heat
+                self.is_overheated = True
+                if not self.show_overheat_message:
+                    self.start_overheat_message() 
+        else:
+            self.weapon_heat -= self.heat_decrease_rate * dt
+            if self.weapon_heat < 0:
+                self.weapon_heat = 0
+            
+            if self.is_overheated and self.weapon_heat <= 0:
+                self.is_overheated = False
 
         self.player.update(dt, player_forward_vector, mouse_delta.x)
 
@@ -296,6 +350,8 @@ class Game:
         clear_background(BLACK)
         begin_mode_3d(self.camera)
 
+        self.skybox.draw()
+
         self.fog.draw()
         self.player.draw()
 
@@ -314,23 +370,15 @@ class Game:
 
     def draw_ui(self):
         draw_text(f"FPS: {get_fps()}", 10, 10, 20, Color(50, 255, 150, 255))
-        self.player.draw_hud(self.camera_pitch, self.camera_yaw, self.show_altitude_warning)
-
-        weapon_info = f"Weapon: {self.current_bullet_type.upper()}"
-        draw_text(weapon_info, SCREEN_WIDTH - 300, 10, 20, Color(255, 255, 0, 255))
         
-        bullet_count = f"Bullets: {self.bullet_manager.get_bullet_count()}"
-        draw_text(bullet_count, SCREEN_WIDTH - 300, 35, 16, Color(200, 200, 200, 255))
-
-        if self.is_shooting:
-            shooting_text = "FIRING..."
-            draw_text(shooting_text, SCREEN_WIDTH - 300, 60, 14, Color(255, 255, 100, 255))
-        elif self.shoot_cooldown:
-            cooldown_text = "RELOADING..."
-            draw_text(cooldown_text, SCREEN_WIDTH - 300, 60, 14, Color(255, 100, 100, 255))
-        else:
-            ready_text = "READY"
-            draw_text(ready_text, SCREEN_WIDTH - 300, 60, 14, Color(100, 255, 100, 255))
+        weapon_heat_ratio = self.weapon_heat / self.max_weapon_heat if self.max_weapon_heat > 0 else 0
+        self.player.draw_hud(
+            self.camera_pitch,
+            self.camera_yaw,
+            self.show_altitude_warning,
+            weapon_heat_ratio=weapon_heat_ratio,
+            is_overheated=self.is_overheated
+        )
 
         if self.show_altitude_warning:
             alpha = int(abs(sin(get_time() * 10)) * 255)
@@ -342,6 +390,13 @@ class Game:
             text_pos_y = SCREEN_HEIGHT - FONT_SIZE - FONT_PADDING
 
             draw_text(text, text_pos_x, text_pos_y, FONT_SIZE, warning_color)
+
+        if self.show_overheat_message:
+            alpha = int(abs(sin(get_time() * 10)) * 255)
+            warning_color = Color(255, 255, 0, alpha)
+            text = "OVERHEATED!!!"
+            text_width = measure_text(text, 30)
+            draw_text(text, (SCREEN_WIDTH - text_width) // 2, SCREEN_HEIGHT // 2 + 120, 30, warning_color)
 
         if DEBUG:
             if self.show_debug_boxes:
@@ -373,6 +428,7 @@ class Game:
         for sound in self.audio.values():
             unload_sound(sound)
         enable_cursor()
+        self.skybox.deinit()
 
 
     def run(self):
