@@ -1,9 +1,10 @@
 from settings import * 
 
+from models import Fog
 from player import Player
-from models import Fog, SkycraperMultipleLayer, SkyscraperSimple
-from bullet import BulletManager
 from skybox import Skybox
+from bullet import BulletManager
+from building_manager import BuildingManager
 
 
 class Game:
@@ -71,8 +72,8 @@ class Game:
         self.camera.position = Vector3(self.player.position.x, self.player.position.y + 10, self.player.position.z + self.camera_distance)
         self.camera.target = vector3_add(self.player.position, self.camera_target_offset)
 
-        self.collidable_objects = []
-        self.generate_city()
+        self.building_manager = BuildingManager(self.models)
+        self.building_manager.generate_city()
 
         self.show_debug_boxes = False
         self.show_oriented_debug = False
@@ -148,7 +149,8 @@ class Game:
 
 
     def check_collisions(self):
-        for obj in self.collidable_objects:
+        collidable_objects = self.building_manager.get_collision_objects()
+        for obj in collidable_objects:
             if self.player.check_collision_with(obj):
                 self.handle_collision(obj)
                 return True
@@ -202,7 +204,8 @@ class Game:
         
         part_colors = [RED, BLUE, YELLOW, PURPLE, ORANGE]
         
-        for obj in self.collidable_objects:
+        collidable_objects = self.building_manager.get_collision_objects()
+        for obj in collidable_objects:
             if hasattr(obj, 'has_multiple_collision_boxes') and obj.has_multiple_collision_boxes:
                 boxes = obj.get_world_bounding_boxes()
                 for i, box in enumerate(boxes):
@@ -212,42 +215,6 @@ class Game:
                 obj_box = obj.get_world_bounding_box()
                 if obj_box:
                     draw_bounding_box(obj_box, RED)
-
-
-    def generate_city(self, count=BUILDING_COUNT):
-        print(f"Generating {count} buildings in a radius of {CITY_RADIUS}m.")
-        
-        max_attempts_per_building = 100
-
-        for _ in range(count):
-            for attempt in range(max_attempts_per_building):
-                x = uniform(-CITY_RADIUS, CITY_RADIUS)
-                z = uniform(-CITY_RADIUS, CITY_RADIUS)
-                
-                if sqrt(x*x + z*z) < MIN_DISTANCE_FROM_CENTER:
-                    continue
-
-                is_overlapping = False
-                new_pos = Vector3(x, 0, z)
-                for existing_building in self.collidable_objects:
-                    existing_pos = existing_building.position
-                    distance = sqrt((new_pos.x - existing_pos.x)**2 + (new_pos.z - existing_pos.z)**2)
-                    
-                    if distance < MIN_BUILDING_DISTANCE:
-                        is_overlapping = True
-                        break
-                
-                if not is_overlapping:
-                    rotation = choice([0, 90, 180, 270])
-                    if randint(1, 10) <= 4:
-                        building = SkycraperMultipleLayer(self.models["skyscraper01"], Vector3(x, -10, z), rotation_angle=rotation)
-                    else:
-                        building = SkyscraperSimple(self.models["skyscraper02"], Vector3(x, -14.8, z), rotation_angle=rotation)
-                    
-                    self.collidable_objects.append(building)
-                    break 
-            else:
-                print(f"[WARNING]: Could not find a position for a building after {max_attempts_per_building} attempts.")
 
 
     def check_player_bounds(self, dt):
@@ -286,7 +253,6 @@ class Game:
         self.handle_shooting(player_forward_vector)
         self.handle_weapon_switching()
 
-
         if self.is_shooting and not self.is_overheated:
             self.weapon_heat += self.heat_increase_rate * dt 
             if self.weapon_heat >= self.max_weapon_heat:
@@ -304,7 +270,8 @@ class Game:
 
         self.player.update(dt, player_forward_vector, mouse_delta.x)
 
-        self.bullet_manager.update(dt, self.collidable_objects)
+        spatial_grid = self.building_manager.get_spatial_grid()
+        self.bullet_manager.update(dt, spatial_grid)
 
         self.check_collisions()
         self.check_player_bounds(dt)
@@ -365,8 +332,8 @@ class Game:
                 self.show_oriented_debug = not self.show_oriented_debug
                 self.player._show_oriented_debug = self.show_oriented_debug
             if is_key_pressed(KEY_G):
-                self.collidable_objects.clear()
-                self.generate_city()
+                self.building_manager.clear_all()
+                self.building_manager.generate_city()
             if is_key_pressed(KEY_I):
                 if not self.player.is_invulnerable:
                     self.player.start_invulnerability("manual test")
@@ -383,11 +350,8 @@ class Game:
 
         self.fog.draw()
         self.player.draw()
-
-        for obj in self.collidable_objects:
-            obj.draw()
-
-        self.bullet_manager.draw()
+        self.building_manager.draw(camera=self.camera)
+        self.bullet_manager.draw(camera=self.camera)
 
         if DEBUG:
             self.draw_debug_boxes()
@@ -446,16 +410,20 @@ class Game:
             if self.show_oriented_debug:
                 draw_text("DEBUG: Oriented Box ON", 10, 110, 20, LIME)
                 draw_text("GREEN=Vulnerable, PURPLE=Invulnerable - Rotating", 10, 135, 14, WHITE)
-            draw_text("DEBUG CONTROLS:", 10, SCREEN_HEIGHT - 200, 16, YELLOW)
-            draw_text("[LEFT CLICK] to shoot (hold for continuous)", 10, SCREEN_HEIGHT - 180, 14, WHITE)
-            draw_text("[G] to generate a new random city", 10, SCREEN_HEIGHT - 160, 14, WHITE)
-            draw_text("[B] to toggle AABB boxes", 10, SCREEN_HEIGHT - 140, 14, WHITE)
-            draw_text("[V] to toggle oriented plane box", 10, SCREEN_HEIGHT - 120, 14, WHITE)
-            draw_text("[I] to test invulnerability", 10, SCREEN_HEIGHT - 100, 14, WHITE)
-            draw_text("[C] to clear all bullets", 10, SCREEN_HEIGHT - 80, 14, WHITE)
-            precise_buildings = sum(1 for obj in self.collidable_objects if hasattr(obj, 'has_multiple_collision_boxes') and obj.has_multiple_collision_boxes)
-            draw_text(f"Buildings: {len(self.collidable_objects)} (Multi-layer: {precise_buildings})", 10, SCREEN_HEIGHT - 60, 14, WHITE)
-            draw_text(f"Active Bullets: {self.bullet_manager.get_bullet_count()}", 10, SCREEN_HEIGHT - 40, 14, WHITE)
+            draw_text("DEBUG CONTROLS:", 10, SCREEN_HEIGHT - 220, 16, YELLOW)
+            draw_text("[LEFT CLICK] to shoot (hold for continuous)", 10, SCREEN_HEIGHT - 200, 14, WHITE)
+            draw_text("[G] to generate a new random city", 10, SCREEN_HEIGHT - 180, 14, WHITE)
+            draw_text("[B] to toggle AABB boxes", 10, SCREEN_HEIGHT - 160, 14, WHITE)
+            draw_text("[V] to toggle oriented plane box", 10, SCREEN_HEIGHT - 140, 14, WHITE)
+            draw_text("[I] to test invulnerability", 10, SCREEN_HEIGHT - 120, 14, WHITE)
+            draw_text("[C] to clear all bullets", 10, SCREEN_HEIGHT - 100, 14, WHITE)
+
+            building_stats = self.building_manager.get_instancing_stats()
+            draw_text(f"Buildings: {building_stats['total']} (Simple: {building_stats['simple']}, Complex: {building_stats['complex']})", 10, SCREEN_HEIGHT - 80, 14, WHITE)
+            draw_text(f"Building Instancing: {'ON' if building_stats['instancing_enabled'] else 'OFF'} - Draw calls: {building_stats['draw_calls']}", 10, SCREEN_HEIGHT - 60, 14, YELLOW)
+
+            bullet_status = "ON" if self.bullet_manager.instancing_enabled else "OFF"
+            draw_text(f"Bullet Instancing: {bullet_status} - Active bullets: {self.bullet_manager.get_bullet_count()}", 10, SCREEN_HEIGHT - 40, 14, WHITE)
 
             if self.player.is_invulnerable:
                 draw_text("STATUS: INVULNERABLE", 10, SCREEN_HEIGHT - 20, 18, PURPLE)

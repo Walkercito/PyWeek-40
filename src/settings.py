@@ -8,6 +8,8 @@ from custom_timer import Timer
 def lerp(a, b, t):
     return a + (b - a) * t
 
+GRID_CELL_SIZE = 150.0
+
 BASE_FOV = 45.0
 BOOST_FOV = 60.0
 ALTITUDE_WARNING_Y = 12.0
