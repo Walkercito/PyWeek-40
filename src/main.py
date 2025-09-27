@@ -5,8 +5,7 @@ from player import Player
 from skybox import Skybox
 from bullet import BulletManager
 from building_manager import BuildingManager
-
-
+from models import WallCube
 class Game:
     def __init__(self):
         init_window(SCREEN_WIDTH, SCREEN_HEIGHT, "Skyscraper")
@@ -48,11 +47,14 @@ class Game:
             Vector3(0.7, 0.8, 1.0), Vector3(0.4, 0.6, 0.8),
         ]
 
-        self.fog = Fog(self.camera, size=600, segments=50)
+        wall_size = 1000
+        self.fog = Fog(self.camera, size=wall_size, segments=50)
         self.fog.set_fog_parameters(
             density=0.7, speed=0.2, scale=6.0,
             height=8.0, color=Vector3(0.6, 0.8, 1.0)
         )
+
+        self.wall_cube = WallCube(size=wall_size, height=200)
 
         self.bullet_manager = BulletManager()
         self.current_bullet_type = "normal"
@@ -77,6 +79,7 @@ class Game:
 
         self.show_debug_boxes = False
         self.show_oriented_debug = False
+        self.show_wall_wireframe = False
 
         self.skybox = Skybox()
 
@@ -331,6 +334,8 @@ class Game:
             if is_key_pressed(KEY_V):
                 self.show_oriented_debug = not self.show_oriented_debug
                 self.player._show_oriented_debug = self.show_oriented_debug
+            if is_key_pressed(KEY_N): 
+                self.show_wall_wireframe = not self.show_wall_wireframe
             if is_key_pressed(KEY_G):
                 self.building_manager.clear_all()
                 self.building_manager.generate_city()
@@ -348,6 +353,8 @@ class Game:
 
         self.skybox.draw()
 
+        self.wall_cube.draw()
+
         self.fog.draw()
         self.player.draw()
         self.building_manager.draw(camera=self.camera)
@@ -355,6 +362,9 @@ class Game:
 
         if DEBUG:
             self.draw_debug_boxes()
+            
+            if self.show_wall_wireframe:
+                self.wall_cube.draw_wireframe()
 
         end_mode_3d()
         self.draw_ui()
@@ -410,11 +420,15 @@ class Game:
             if self.show_oriented_debug:
                 draw_text("DEBUG: Oriented Box ON", 10, 110, 20, LIME)
                 draw_text("GREEN=Vulnerable, PURPLE=Invulnerable - Rotating", 10, 135, 14, WHITE)
-            draw_text("DEBUG CONTROLS:", 10, SCREEN_HEIGHT - 220, 16, YELLOW)
-            draw_text("[LEFT CLICK] to shoot (hold for continuous)", 10, SCREEN_HEIGHT - 200, 14, WHITE)
-            draw_text("[G] to generate a new random city", 10, SCREEN_HEIGHT - 180, 14, WHITE)
-            draw_text("[B] to toggle AABB boxes", 10, SCREEN_HEIGHT - 160, 14, WHITE)
-            draw_text("[V] to toggle oriented plane box", 10, SCREEN_HEIGHT - 140, 14, WHITE)
+            if self.show_wall_wireframe:
+                draw_text("DEBUG: Wall Wireframe ON", 10, 160, 20, CYAN)
+            
+            draw_text("DEBUG CONTROLS:", 10, SCREEN_HEIGHT - 240, 16, YELLOW)
+            draw_text("[LEFT CLICK] to shoot (hold for continuous)", 10, SCREEN_HEIGHT - 220, 14, WHITE)
+            draw_text("[G] to generate a new random city", 10, SCREEN_HEIGHT - 200, 14, WHITE)
+            draw_text("[B] to toggle AABB boxes", 10, SCREEN_HEIGHT - 180, 14, WHITE)
+            draw_text("[V] to toggle oriented plane box", 10, SCREEN_HEIGHT - 160, 14, WHITE)
+            draw_text("[N] to toggle wall wireframe", 10, SCREEN_HEIGHT - 140, 14, WHITE)
             draw_text("[I] to test invulnerability", 10, SCREEN_HEIGHT - 120, 14, WHITE)
             draw_text("[C] to clear all bullets", 10, SCREEN_HEIGHT - 100, 14, WHITE)
 

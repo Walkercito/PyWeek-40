@@ -283,3 +283,97 @@ class Fog(Model):
     def __del__(self):
         if hasattr(self, 'shader') and self.shader is not None:
             unload_shader(self.shader)
+
+
+class WallCube:
+    """Creates a hollow cube."""
+    def __init__(self, size=600, height=200):
+        self.size = size
+        self.height = height
+        self.half_size = size / 2
+        self.wall_thickness = 10.0
+        
+        self.wall_color = Color(80, 120, 160, 150)
+    
+
+    def draw(self):
+        begin_blend_mode(BLEND_ALPHA)
+        
+        draw_cube(
+            Vector3(0, self.height/2, self.half_size),
+            self.size, self.height, self.wall_thickness,
+            self.wall_color
+        )
+
+        draw_cube(
+            Vector3(0, self.height/2, -self.half_size),
+            self.size, self.height, self.wall_thickness,
+            self.wall_color
+        )
+
+        draw_cube(
+            Vector3(self.half_size, self.height/2, 0),
+            self.wall_thickness, self.height, self.size,
+            self.wall_color
+        )
+
+        draw_cube(
+            Vector3(-self.half_size, self.height/2, 0),
+            self.wall_thickness, self.height, self.size,
+            self.wall_color
+        )
+        
+        end_blend_mode()
+    
+
+    def draw_wireframe(self):
+        wall_color = Color(100, 150, 200, 255)
+
+        bottom_corners = [
+            Vector3(-self.half_size, 0, -self.half_size),  # SW
+            Vector3(self.half_size, 0, -self.half_size),   # SE
+            Vector3(self.half_size, 0, self.half_size),    # NE
+            Vector3(-self.half_size, 0, self.half_size)    # NW
+        ]
+
+        top_corners = [
+            Vector3(-self.half_size, self.height, -self.half_size),  # SW
+            Vector3(self.half_size, self.height, -self.half_size),   # SE
+            Vector3(self.half_size, self.height, self.half_size),    # NE
+            Vector3(-self.half_size, self.height, self.half_size)    # NW
+        ]
+
+        for i in range(4):
+            draw_line_3d(bottom_corners[i], bottom_corners[(i + 1) % 4], wall_color)
+
+        for i in range(4):
+            draw_line_3d(top_corners[i], top_corners[(i + 1) % 4], wall_color)
+ 
+        for i in range(4):
+            draw_line_3d(bottom_corners[i], top_corners[i], wall_color)
+    
+
+    def get_collision_walls(self):
+        collision_walls = []
+
+        collision_walls.append(BoundingBox(
+            Vector3(-self.half_size, 0, self.half_size - self.wall_thickness/2),
+            Vector3(self.half_size, self.height, self.half_size + self.wall_thickness/2)
+        ))
+
+        collision_walls.append(BoundingBox(
+            Vector3(-self.half_size, 0, -self.half_size - self.wall_thickness/2),
+            Vector3(self.half_size, self.height, -self.half_size + self.wall_thickness/2)
+        ))
+
+        collision_walls.append(BoundingBox(
+            Vector3(self.half_size - self.wall_thickness/2, 0, -self.half_size),
+            Vector3(self.half_size + self.wall_thickness/2, self.height, self.half_size)
+        ))
+
+        collision_walls.append(BoundingBox(
+            Vector3(-self.half_size - self.wall_thickness/2, 0, -self.half_size),
+            Vector3(-self.half_size + self.wall_thickness/2, self.height, self.half_size)
+        ))
+        
+        return collision_walls
