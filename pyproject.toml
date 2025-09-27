@@ -7,3 +7,8 @@ requires-python = ">=3.12"
 dependencies = [
     "raylib>=5.5.0.3",
 ]
+
+[dependency-groups]
+dev = [
+    "auto-py-to-exe>=2.47.0",
+]
