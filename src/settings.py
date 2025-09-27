@@ -14,6 +14,7 @@ class GameState(Enum):
     GRAPHICS_SETTINGS = auto()
     CONTROLS_INFO = auto()
     CREDITS_SCREEN = auto()
+    LOADING = auto()
     PLAYING = auto()
     PAUSED = auto()
     GAME_OVER = auto()

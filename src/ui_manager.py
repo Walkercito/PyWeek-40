@@ -54,6 +54,10 @@ class UIManager:
         self.draw_button("START GAME", button_rects["start"], 30, hover_states["start"])
         self.draw_button("SETTINGS", button_rects["settings"], 30, hover_states["settings"])
         self.draw_button("QUIT", button_rects["quit"], 30, hover_states["quit"])
+        
+        version_font_size = int(20 * sh / 980)
+        draw_text_ex(self.font, "Aftershock v1.0.0", Vector2(10, sh - 30), version_font_size, 1, fade(WHITE, 0.7))
+
 
     def draw_settings_menu(self, skybox, menu_camera, button_rects, hover_states):
         self.draw_rotating_skybox(skybox, menu_camera)
@@ -117,7 +121,10 @@ class UIManager:
             "LEFT SHIFT - Engage boost",
             "1, 2, 3 - Switch weapon type (Normal, Heavy, Rapid)",
             "TAB - Toggle enhanced radar mode",
-            "ESC / P - Pause the game",
+            "P or ESC - Pause / Resume the game",
+            "",
+            "In the pause menu, you can return to the Main Menu (progress is lost)",
+            "or quit the application.",
             "",
             "Objective: Shoot down enemy aircraft to score points.",
             "Avoid crashing into buildings and the ground.",

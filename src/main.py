@@ -69,6 +69,8 @@ class Game:
         self.show_altitude_warning = False
         self.show_boundary_warning = False
         self.world_boundary = CITY_RADIUS + 50.0
+        
+        self.loading_timer = Timer(2.0)
 
         self.color_phase = 0.0
         self.current_color_index = 0
@@ -103,6 +105,7 @@ class Game:
         self.skybox = Skybox()
         self.building_manager.generate_city()
 
+
     def load_external_data(self):
         try:
             with open(join("assets", "ui", "splashes.txt"), 'r') as f:
@@ -121,6 +124,7 @@ class Game:
         self.link_rects = []
         self.link_hover_states = []
         self.credits_scroll_y = 0.0
+
 
     def setup_ui_elements(self):
         sw, sh = get_screen_width(), get_screen_height()
@@ -149,6 +153,7 @@ class Game:
 
         self.hover_states = {key: False for key in self.button_rects}
 
+
     def reset_game(self):
         print("[*] Resetting game state for a new game...")
         self.score = 0
@@ -170,6 +175,7 @@ class Game:
         self.enemy_manager.spawn_enemy(Vector3(-150, 80, -180), "interceptor")
         self.enemy_manager.spawn_enemy(Vector3(0, 90, -250), "bomber")
         print(f"[*] Initial enemies spawned. Active count: {self.enemy_manager.get_enemy_count()}")
+
 
     def import_assets(self):
         print("[*] Loading game assets...")
@@ -197,6 +203,7 @@ class Game:
         
         print("[*] Non-audio asset loading complete!")
 
+
     def shoot(self, position, forward_vector):
         if self.shoot_cooldown:
             return
@@ -216,13 +223,16 @@ class Game:
             pitch_variation=0.05
         )
 
+
     def start_overheat_message(self):
         self.show_overheat_message = True
         self.overheat_message_timer.activate()
 
+
     def end_overheat_message(self):
         self.show_overheat_message = False
         self.overheat_message_timer.deactivate()
+
 
     def update_overheat_message(self):
         if not self.show_overheat_message:
@@ -233,14 +243,17 @@ class Game:
         if not self.overheat_message_timer:
             self.end_overheat_message()
 
+
     def cycle_fog_color(self):
         self.current_color_index = (self.current_color_index + 1) % len(self.base_colors)
+
 
     def handle_shooting(self, player_forward_vector):
         self.is_shooting = is_mouse_button_down(MOUSE_BUTTON_LEFT)
 
         if self.is_shooting and not self.shoot_cooldown and not self.is_overheated:
             self.shoot(self.player.position, player_forward_vector)
+
 
     def handle_weapon_switching(self):
         if is_key_pressed(KEY_ONE):
@@ -249,6 +262,7 @@ class Game:
             self.current_bullet_type = "heavy"
         elif is_key_pressed(KEY_THREE):
             self.current_bullet_type = "rapid"
+
 
     def check_collisions(self):
         if self.player.is_dying:
@@ -267,6 +281,7 @@ class Game:
 
         return False
 
+
     def check_player_bullet_collisions(self):
         if self.player.is_invulnerable or self.player.is_dying:
             return
@@ -278,6 +293,7 @@ class Game:
                 self.camera_shake_timer.activate()
                 self.vfx_manager.create_explosion(bullet.position, "explosion_air01", scale=3.0)
                 break
+
 
     def handle_collision(self, collided_object):
         if self.player.is_invulnerable:
@@ -299,6 +315,7 @@ class Game:
 
             self.player.start_invulnerability(collision_reason)
 
+
     def handle_enemy_collision(self, enemy):
         if self.player.is_invulnerable:
             return
@@ -317,6 +334,7 @@ class Game:
         if not is_fatal:
             self.player.start_invulnerability("enemy collision")
 
+
     def player_death_callback(self):
         self.player_lives -= 1
         self.audio_manager.play_sound_3d('player_explosion', self.player.position, self.player.velocity, base_volume=1.2)
@@ -331,6 +349,7 @@ class Game:
             self.highscore_manager.save_high_score(self.score)
             self.game_state = GameState.GAME_OVER
             enable_cursor()
+
 
     def identify_collision_part(self, building):
         if not hasattr(building, 'get_world_bounding_boxes'):
@@ -349,6 +368,7 @@ class Game:
 
         return "building"
 
+
     def check_player_bounds(self, dt):
         distance_from_center = sqrt(self.player.position.x ** 2 + self.player.position.z ** 2)
 
@@ -362,6 +382,7 @@ class Game:
             self.player.take_damage(damage_to_apply, on_death=self.player_death_callback)
         else:
             self.show_boundary_warning = False
+
 
     def update_playing(self):
         if is_key_pressed(KEY_ESCAPE) or is_key_pressed(KEY_P):
@@ -423,7 +444,7 @@ class Game:
         altitude_warning_active = self.player.position.y <= ALTITUDE_WARNING_Y and not self.player.is_invulnerable and not self.player.is_dying
         self.show_altitude_warning = altitude_warning_active
 
-        # Pasar las advertencias al AudioManager para gestionar el sonido
+        # send warnings to audio manager
         self.audio_manager.manage_warning_sound(self.game_state, self.show_altitude_warning, self.show_boundary_warning)
 
         target_fov = self.boost_fov if self.player.is_boosting else self.base_fov
@@ -462,6 +483,7 @@ class Game:
 
         self.fog.update(dt)
 
+
     def draw_playing_scene(self):
         begin_mode_3d(self.camera)
         self.skybox.draw()
@@ -474,6 +496,7 @@ class Game:
         self.enemy_manager.draw()
         end_mode_3d()
         self.draw_game_hud()
+
 
     def draw_game_hud(self):
         sw, sh = get_screen_width(), get_screen_height()
@@ -523,6 +546,7 @@ class Game:
             text_width = measure_text_ex(self.font, text, 30, 1).x
             draw_text_ex(self.font, text, Vector2((sw - text_width) // 2, sh // 2 + 120), 30, 1, warning_color)
 
+
     def cleanup(self):
         for model in self.models.values():
             if model:
@@ -530,6 +554,7 @@ class Game:
         self.audio_manager.cleanup()
         self.skybox.deinit()
         unload_font(self.font)
+
 
     def run(self):
         while not self.should_close:
@@ -539,6 +564,7 @@ class Game:
         self.cleanup()
         close_audio_device()
         close_window()
+
 
     def update(self):
         if window_should_close():
@@ -554,6 +580,7 @@ class Game:
             GameState.GRAPHICS_SETTINGS: self.update_graphics_settings,
             GameState.CONTROLS_INFO: self.update_controls_info,
             GameState.CREDITS_SCREEN: self.update_credits_screen,
+            GameState.LOADING: self.update_loading,
             GameState.PLAYING: self.update_playing,
             GameState.PAUSED: self.update_pause_menu,
             GameState.GAME_OVER: self.update_game_over,
@@ -561,6 +588,7 @@ class Game:
         handler = state_handlers.get(self.game_state)
         if handler:
             handler()
+
 
     def draw(self):
         begin_drawing()
@@ -572,6 +600,7 @@ class Game:
             GameState.GRAPHICS_SETTINGS: self.draw_graphics_screen,
             GameState.CONTROLS_INFO: self.draw_controls_screen,
             GameState.CREDITS_SCREEN: self.draw_credits_screen,
+            GameState.LOADING: self.draw_loading_screen,
             GameState.PLAYING: self.draw_playing_scene,
             GameState.PAUSED: self.draw_pause_screen,
             GameState.GAME_OVER: self.draw_game_over_screen,
@@ -582,12 +611,14 @@ class Game:
 
         end_drawing()
 
+
     def draw_main_menu_screen(self):
         self.ui_manager.draw_main_menu(self.skybox, self.menu_camera, self.highscore_manager.high_score,
                                      self.current_splash,
                                      {"start": self.button_rects["start"], "settings": self.button_rects["settings"],
                                       "quit": self.button_rects["quit"]},
                                      self.hover_states)
+
 
     def draw_settings_screen(self):
         self.ui_manager.draw_settings_menu(self.skybox, self.menu_camera,
@@ -596,13 +627,16 @@ class Game:
                                           "credits": self.button_rects["credits"], "back": self.button_rects["back"]},
                                          self.hover_states)
 
+
     def draw_graphics_screen(self):
         self.ui_manager.draw_graphics_menu(self.skybox, self.menu_camera, self.settings, self.resolutions,
                                          self.button_rects, self.hover_states)
 
+
     def draw_controls_screen(self):
         self.ui_manager.draw_controls_screen(self.skybox, self.menu_camera, {"back": self.button_rects["back"]},
                                            self.hover_states)
+
 
     def draw_credits_screen(self):
         sh = get_screen_height()
@@ -611,10 +645,21 @@ class Game:
                                           {"back": self.button_rects["back"]}, self.hover_states,
                                           self.link_hover_states, self.credits_scroll_y, content_height)
 
+
     def draw_pause_screen(self):
         self.draw_playing_scene()
         self.ui_manager.draw_pause_menu({"resume": self.button_rects["resume"], "main_menu": self.button_rects["main_menu"],
                                        "quit": self.button_rects["pause_quit"]}, self.hover_states)
+
+
+    def draw_loading_screen(self):
+        self.ui_manager.draw_rotating_skybox(self.skybox, self.menu_camera)
+        sw, sh = get_screen_width(), get_screen_height()
+        text = "LOADING..."
+        font_size = int(60 * sh / 980)
+        text_width = measure_text_ex(self.font, text, font_size, 1).x
+        draw_text_ex(self.font, text, Vector2(int((sw - text_width) / 2), int(sh / 2 - font_size / 2)), font_size, 1, WHITE)
+
 
     def draw_game_over_screen(self):
         self.draw_playing_scene()
@@ -622,9 +667,10 @@ class Game:
                                      {"restart": self.button_rects["restart"],
                                       "main_menu": self.button_rects["go_main_menu"]}, self.hover_states)
 
+
     def update_main_menu(self):
         self.menu_camera_angle += get_frame_time() * 0.1
-        self.menu_camera.position = Vector3(cos(self.menu_camera_angle) * 10, 2.0, sin(self.menu_camera_angle) * 10)
+        self.menu_camera.position = Vector3(cos(self.menu_camera_angle) * 10, -2.3, sin(self.menu_camera_angle) * 10)
         self.menu_camera.target = Vector3(0, 2, 0)
 
         mouse_pos = get_mouse_position()
@@ -633,13 +679,26 @@ class Game:
 
         if is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
             if self.hover_states["start"]:
-                self.reset_game()
-                self.game_state = GameState.PLAYING
-                disable_cursor()
+                self.game_state = GameState.LOADING
+                self.loading_timer.activate()
+                self.skybox.set_active_texture('game')
             elif self.hover_states["settings"]:
                 self.game_state = GameState.SETTINGS
             elif self.hover_states["quit"]:
                 self.should_close = True
+
+
+    def update_loading(self):
+        self.menu_camera_angle += get_frame_time() * 0.1
+        self.menu_camera.position = Vector3(cos(self.menu_camera_angle) * 10, 2.0, sin(self.menu_camera_angle) * 10)
+        self.menu_camera.target = Vector3(0, 2, 0)
+        
+        self.loading_timer.update()
+        if not self.loading_timer:
+            self.reset_game()
+            self.game_state = GameState.PLAYING
+            disable_cursor()
+
 
     def update_settings(self):
         mouse_pos = get_mouse_position()
@@ -657,6 +716,7 @@ class Game:
                 self.link_rects = []
             elif self.hover_states["back"]:
                 self.game_state = GameState.MAIN_MENU
+
 
     def update_graphics_settings(self):
         mouse_pos = get_mouse_position()
@@ -682,6 +742,7 @@ class Game:
             elif self.hover_states["back"]:
                 self.game_state = GameState.SETTINGS
 
+
     def apply_graphics_settings(self):
         res = self.resolutions[self.settings['resolution_index']]
         if self.settings['fullscreen'] and not is_window_fullscreen():
@@ -693,14 +754,17 @@ class Game:
             set_window_size(res[0], res[1])
         self.setup_ui_elements()
 
+
     def apply_audio_settings(self):
         self.audio_manager.apply_settings()
+
 
     def update_controls_info(self):
         mouse_pos = get_mouse_position()
         self.hover_states["back"] = check_collision_point_rec(mouse_pos, self.button_rects["back"])
         if is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and self.hover_states["back"]:
             self.game_state = GameState.SETTINGS
+
 
     def update_credits_screen(self):
         mouse_pos = get_mouse_position()
@@ -753,6 +817,7 @@ class Game:
                         open_url(self.credits[credit_index]['link'])
                         break
 
+
     def update_pause_menu(self):
         if is_key_pressed(KEY_ESCAPE) or is_key_pressed(KEY_P):
             self.game_state = GameState.PLAYING
@@ -770,8 +835,10 @@ class Game:
                 disable_cursor()
             elif self.hover_states["main_menu"]:
                 self.game_state = GameState.MAIN_MENU
+                self.skybox.set_active_texture('menu')
             elif self.hover_states["pause_quit"]:
                 self.should_close = True
+
 
     def update_game_over(self):
         mouse_pos = get_mouse_position()
@@ -785,6 +852,7 @@ class Game:
                 disable_cursor()
             elif self.hover_states["go_main_menu"]:
                 self.game_state = GameState.MAIN_MENU
+                self.skybox.set_active_texture('menu')
 
 
 if __name__ == '__main__':
