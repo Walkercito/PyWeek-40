@@ -4,6 +4,7 @@ from math import sin, cos, radians, degrees, sqrt
 from random import randint, uniform, choice
 from os.path import join, exists
 from custom_timer import Timer
+from enum import Enum
 
 def lerp(a, b, t):
     return a + (b - a) * t
@@ -30,4 +31,4 @@ FPS = 60
 FONT_SIZE = 60
 FONT_PADDING = 20
 
-DEBUG = True
+DEBUG = False

@@ -4,7 +4,7 @@ from custom_timer import Timer
 
 
 class Player(Model):
-    """Player class with its own UI"""
+    """Player class with its own UI and ADVANCED RADAR SYSTEM"""
     def __init__(self, model):
         super().__init__(model = model, speed = 25, position = Vector3(0, 35, 0))
         self.model.transform = matrix_identity()
@@ -44,6 +44,11 @@ class Player(Model):
 
         self.max_health = PLAYER_MAX_HEALTH
         self.health = self.max_health
+
+        self.radar_range = 320.0 
+        self.radar_enhanced_mode = False
+        self.radar_sweep_angle = 0.0 
+        self.radar_ping_timer = Timer(2.0, repeat=True, autostart=True) 
 
 
     def take_damage(self, amount):
@@ -218,6 +223,9 @@ class Player(Model):
         else:
             self.is_boosting = False
 
+        if is_key_pressed(KEY_TAB):
+            self.radar_enhanced_mode = not self.radar_enhanced_mode
+
 
     def move(self, dt):
         current_max_speed = self.max_speed * self.boost_speed_multiplier if self.is_boosting else self.max_speed
@@ -279,6 +287,11 @@ class Player(Model):
         self.update_boost(dt)
         self.move(dt)
 
+        self.radar_ping_timer.update()
+        self.radar_sweep_angle += dt * 90.0  
+        if self.radar_sweep_angle > 360:
+            self.radar_sweep_angle -= 360
+
         target_roll = 0.0
         is_moving = vector3_length_sqr(self.velocity) > 1.0 
         is_turning = abs(mouse_dx) > 0.01
@@ -319,7 +332,7 @@ class Player(Model):
         self.draw_debug_oriented_box()
 
 
-    def draw_hud(self, camera_pitch, camera_yaw, is_warning_active=False, weapon_heat_ratio=0.0, is_overheated=False):
+    def draw_hud(self, camera_pitch, camera_yaw, is_warning_active=False, weapon_heat_ratio=0.0, is_overheated=False, enemies=None):
         center_x = SCREEN_WIDTH // 2
         center_y = SCREEN_HEIGHT // 2
 
@@ -446,30 +459,7 @@ class Player(Model):
             char_width = measure_text(char, font_size)
             draw_text(char, int(x_pos_hp - char_width / 2), int(y_start_hp + i * (font_size + char_spacing)), font_size, speedo_color)
 
-        # radar
-        radar_center = Vector2(SCREEN_WIDTH - 130, SCREEN_HEIGHT - 140)
-        radar_radius = 100.0
-        player_heading_deg = -degrees(camera_yaw)
-        draw_circle_v(radar_center, radar_radius, fade(BLACK, 0.5))
-        fov_angle = 60
-        draw_circle_sector(radar_center, radar_radius - 5, player_heading_deg - fov_angle / 2, player_heading_deg + fov_angle / 2, 30, fade(final_hud_color, 0.2))
-
-        cardinals = {'N': 0, 'E': 90, 'S': 180, 'W': 270}
-        for text, angle in cardinals.items():
-            rad = radians(angle - player_heading_deg)
-            text_pos = Vector2(radar_center.x + sin(rad) * (radar_radius - 15), radar_center.y - cos(rad) * (radar_radius - 15))
-            line_start = Vector2(radar_center.x + sin(rad) * (radar_radius), radar_center.y - cos(rad) * (radar_radius))
-            line_end = Vector2(radar_center.x + sin(rad) * (radar_radius-5), radar_center.y - cos(rad) * (radar_radius-5))
-            draw_text(text, int(text_pos.x - measure_text(text, 10)/2), int(text_pos.y - 10), 10, final_hud_color)
-            draw_line_v(line_start, line_end, final_hud_color)
-
-        draw_circle_lines(int(radar_center.x), int(radar_center.y), radar_radius, final_hud_color)
-        draw_circle_lines(int(radar_center.x), int(radar_center.y), radar_radius / 2, fade(final_hud_color, 0.3))
-        draw_circle_v(radar_center, 5, final_hud_color)
-        
-        rad_text = "In a 320m radius"
-        text_width_rad = measure_text(rad_text, 14)
-        draw_text(rad_text, int(radar_center.x - text_width_rad/2), int(radar_center.y + radar_radius + 10), 14, final_hud_color)
+        self.draw_advanced_radar(camera_yaw, final_hud_color, enemies)
 
         if self.is_invulnerable:
             remaining_time = self.invulnerability_timer.duration - (get_time() - self.invulnerability_timer.start_time)
@@ -484,3 +474,123 @@ class Player(Model):
             boost_text = "BOOST DRAINED!"
             text_width = measure_text(boost_text, 30)
             draw_text(boost_text, center_x - text_width // 2, center_y + 120, 30, warning_color)
+
+    def draw_advanced_radar(self, camera_yaw, hud_color, enemies):
+        radar_center = Vector2(SCREEN_WIDTH - 130, SCREEN_HEIGHT - 140)
+        radar_radius = 100.0 if not self.radar_enhanced_mode else 120.0
+        player_heading_deg = -degrees(camera_yaw)
+
+        draw_circle_v(radar_center, radar_radius, fade(BLACK, 0.7))
+        
+        for i in range(1, 4):
+            radius = radar_radius * (i / 4.0)
+            draw_circle_lines(int(radar_center.x), int(radar_center.y), radius, fade(hud_color, 0.3))
+
+        fov_angle = 60
+        draw_circle_sector(radar_center, radar_radius - 5, player_heading_deg - fov_angle / 2, player_heading_deg + fov_angle / 2, 30, fade(hud_color, 0.2))
+
+        cardinals = {'N': 0, 'E': 90, 'S': 180, 'W': 270}
+        for text, angle in cardinals.items():
+            rad = radians(angle - player_heading_deg)
+            text_pos = Vector2(radar_center.x + sin(rad) * (radar_radius - 15), radar_center.y - cos(rad) * (radar_radius - 15))
+            line_start = Vector2(radar_center.x + sin(rad) * (radar_radius), radar_center.y - cos(rad) * (radar_radius))
+            line_end = Vector2(radar_center.x + sin(rad) * (radar_radius-5), radar_center.y - cos(rad) * (radar_radius-5))
+            draw_text(text, int(text_pos.x - measure_text(text, 10)/2), int(text_pos.y - 10), 10, hud_color)
+            draw_line_v(line_start, line_end, hud_color)
+
+        if not self.radar_ping_timer:
+            sweep_rad = radians(self.radar_sweep_angle - player_heading_deg)
+            sweep_end = Vector2(
+                radar_center.x + sin(sweep_rad) * radar_radius,
+                radar_center.y - cos(sweep_rad) * radar_radius
+            )
+            for i in range(5):
+                alpha = int(255 * (1.0 - i * 0.2))
+                sweep_color = Color(0, 255, 0, alpha)
+                offset_angle = sweep_rad - radians(i * 2)
+                offset_end = Vector2(
+                    radar_center.x + sin(offset_angle) * radar_radius,
+                    radar_center.y - cos(offset_angle) * radar_radius
+                )
+                draw_line_v(radar_center, offset_end, sweep_color)
+
+        if enemies:
+            for enemy in enemies:
+                distance_to_enemy = vector3_distance(self.position, enemy.position)
+                
+                if distance_to_enemy <= self.radar_range:
+                    relative_x = enemy.position.x - self.position.x
+                    relative_z = enemy.position.z - self.position.z
+                    
+                    cos_heading = cos(radians(player_heading_deg))
+                    sin_heading = sin(radians(player_heading_deg))
+                    
+                    rotated_x = relative_x * cos_heading - relative_z * sin_heading
+                    rotated_z = relative_x * sin_heading + relative_z * cos_heading
+                    
+                    scale = radar_radius / self.radar_range
+                    radar_x = radar_center.x + rotated_x * scale
+                    radar_z = radar_center.y - rotated_z * scale  # inverted Y
+                    
+                    radar_distance = sqrt((radar_x - radar_center.x)**2 + (radar_z - radar_center.y)**2)
+                    if radar_distance <= radar_radius:
+                        enemy_colors = {
+                            "fighter": RED,
+                            "interceptor": ORANGE,
+                            "bomber": MAROON
+                        }
+                        base_color = enemy_colors.get(enemy.enemy_type, RED)
+                        
+                        if hasattr(enemy, 'ai_state'):
+                            if enemy.ai_state.value == "attack":
+                                base_color = Color(255, 0, 0, 255)  # red
+                            elif enemy.ai_state.value == "chase":
+                                base_color = Color(255, 100, 0, 255)  # orange
+                            elif enemy.ai_state.value == "retreat":
+                                base_color = Color(100, 100, 255, 255)  # blue
+                        
+                        point_size = 6.0 if distance_to_enemy < self.radar_range * 0.3 else 4.0
+                        if distance_to_enemy < self.radar_range * 0.1:
+                            point_size = 8.0 
+                        
+                        if hasattr(enemy, 'ai_state') and enemy.ai_state.value in ["attack", "chase"]:
+                            alpha = int(abs(sin(get_time() * 8)) * 255)
+                            base_color = Color(base_color.r, base_color.g, base_color.b, alpha)
+
+                        draw_circle_v(Vector2(radar_x, radar_z), point_size, base_color)
+
+                        if self.radar_enhanced_mode:
+                            draw_circle_lines(int(radar_x), int(radar_z), point_size + 2, fade(base_color, 0.5))
+
+                            if distance_to_enemy < self.radar_range * 0.5:
+                                dist_text = f"{int(distance_to_enemy)}m"
+                                text_width = measure_text(dist_text, 8)
+                                draw_text(dist_text, int(radar_x - text_width/2), int(radar_z + point_size + 4), 8, base_color)
+
+        draw_circle_lines(int(radar_center.x), int(radar_center.y), radar_radius, hud_color)
+        draw_circle_v(radar_center, 3, hud_color)
+        forward_rad = radians(-player_heading_deg)
+        forward_end = Vector2(
+            radar_center.x + sin(forward_rad) * 8,
+            radar_center.y - cos(forward_rad) * 8
+        )
+        draw_line_v(radar_center, forward_end, hud_color)
+
+        if self.radar_enhanced_mode:
+            radar_text = f"Enhanced Radar: {int(self.radar_range)}m"
+            range_color = Color(0, 255, 100, 255)
+        else:
+            radar_text = f"Radar: {int(self.radar_range)}m"
+            range_color = hud_color
+            
+        text_width_rad = measure_text(radar_text, 12)
+        draw_text(radar_text, int(radar_center.x - text_width_rad/2), int(radar_center.y + radar_radius + 10), 12, range_color)
+
+        if enemies:
+            contacts_in_range = len([e for e in enemies if vector3_distance(self.position, e.position) <= self.radar_range])
+            if contacts_in_range > 0:
+                contact_text = f"Contacts: {contacts_in_range}"
+                draw_text(contact_text, int(radar_center.x - measure_text(contact_text, 10)/2), int(radar_center.y + radar_radius + 25), 10, RED)
+
+        tab_text = "[TAB] Enhanced Mode"
+        draw_text(tab_text, int(radar_center.x - measure_text(tab_text, 8)/2), int(radar_center.y + radar_radius + 40), 8, fade(hud_color, 0.7))

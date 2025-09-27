@@ -1,11 +1,13 @@
 from settings import * 
 
-from models import Fog
+from models import Fog, WallCube
 from player import Player
 from skybox import Skybox
 from bullet import BulletManager
 from building_manager import BuildingManager
-from models import WallCube
+from enemy import EnemyManager
+
+
 class Game:
     def __init__(self):
         init_window(SCREEN_WIDTH, SCREEN_HEIGHT, "Skyscraper")
@@ -77,6 +79,14 @@ class Game:
         self.building_manager = BuildingManager(self.models)
         self.building_manager.generate_city()
 
+        self.enemy_manager = EnemyManager(self.models)
+ 
+        print("[*] Spawning initial test enemies...")
+        self.enemy_manager.spawn_enemy(Vector3(200, 60, 200), "fighter")
+        self.enemy_manager.spawn_enemy(Vector3(-150, 80, -180), "interceptor")
+        self.enemy_manager.spawn_enemy(Vector3(0, 90, -250), "bomber")
+        print(f"[*] Initial enemies spawned. Active count: {self.enemy_manager.get_enemy_count()}")
+
         self.show_debug_boxes = False
         self.show_oriented_debug = False
         self.show_wall_wireframe = False
@@ -85,14 +95,34 @@ class Game:
 
 
     def import_assets(self):
+        print("[*] Loading game assets...")
         self.models = {
             "player": load_model(join("assets", "models", "player", "plane01.glb")),
             "skyscraper01": load_model(join("assets", "models", "buildings", "1.glb")),
-            "skyscraper02": load_model(join("assets", "models", "buildings", "2.glb"))
+            "skyscraper02": load_model(join("assets", "models", "buildings", "2.glb")),
         }
+
+        enemy_models = {
+            "enemy01": join("assets", "models", "enemies", "enemy01.glb"),
+            "enemy02": join("assets", "models", "enemies", "enemy02.glb"),
+        }
+        
+        for model_name, model_path in enemy_models.items():
+            try:
+                if exists(model_path):
+                    self.models[model_name] = load_model(model_path)
+                    print(f"[*] Loaded enemy model: {model_name}")
+                else:
+                    print(f"[!] Enemy model file not found: {model_path}")
+                    self.models[model_name] = None
+            except Exception as e:
+                print(f"[ERROR] Failed to load {model_name}: {e}")
+                self.models[model_name] = None
+        
         self.audio = {
             "warning": load_sound(join("assets", "audio", "beep-warning.mp3")),
         }
+        print("[*] Asset loading complete!")
     
 
     def shoot(self, position, forward_vector):
@@ -157,6 +187,12 @@ class Game:
             if self.player.check_collision_with(obj):
                 self.handle_collision(obj)
                 return True
+
+        for enemy in self.enemy_manager.get_enemies():
+            if self.player.check_collision_with(enemy):
+                self.handle_enemy_collision(enemy)
+                return True
+        
         return False
 
 
@@ -175,6 +211,22 @@ class Game:
                 collision_reason = "building collision"
             
             self.player.start_invulnerability(collision_reason)
+            self.camera_shake_timer.activate()
+
+
+    def handle_enemy_collision(self, enemy):
+        if self.player.is_invulnerable:
+            return
+
+        player_damage = 40
+        enemy_damage = 60
+        
+        is_fatal = (self.player.health - player_damage) <= 0
+        self.player.take_damage(player_damage)
+        enemy.take_damage(enemy_damage)
+
+        if not is_fatal:
+            self.player.start_invulnerability("enemy collision")
             self.camera_shake_timer.activate()
 
 
@@ -276,6 +328,8 @@ class Game:
         spatial_grid = self.building_manager.get_spatial_grid()
         self.bullet_manager.update(dt, spatial_grid)
 
+        self.enemy_manager.update(dt, self.player.position, spatial_grid, self.bullet_manager)
+
         self.check_collisions()
         self.check_player_bounds(dt)
         
@@ -334,7 +388,7 @@ class Game:
             if is_key_pressed(KEY_V):
                 self.show_oriented_debug = not self.show_oriented_debug
                 self.player._show_oriented_debug = self.show_oriented_debug
-            if is_key_pressed(KEY_N): 
+            if is_key_pressed(KEY_N):
                 self.show_wall_wireframe = not self.show_wall_wireframe
             if is_key_pressed(KEY_G):
                 self.building_manager.clear_all()
@@ -345,6 +399,23 @@ class Game:
             if is_key_pressed(KEY_C):
                 self.bullet_manager.clear_all()
 
+            if is_key_pressed(KEY_E):
+                spawn_pos = Vector3(
+                    self.player.position.x + uniform(-100, 100),
+                    self.player.position.y + uniform(20, 40),
+                    self.player.position.z + uniform(-100, 100)
+                )
+                spawned = self.enemy_manager.spawn_enemy(spawn_pos)
+                if spawned:
+                    print(f"[*] Manual enemy spawn successful")
+                else:
+                    print(f"[!] Manual enemy spawn failed")
+            
+            if is_key_pressed(KEY_R):
+                enemy_count = self.enemy_manager.get_enemy_count()
+                self.enemy_manager.clear_all()
+                print(f"[*] Cleared {enemy_count} enemies")
+
 
     def draw(self):
         begin_drawing()
@@ -352,17 +423,17 @@ class Game:
         begin_mode_3d(self.camera)
 
         self.skybox.draw()
-
         self.wall_cube.draw()
 
         self.fog.draw()
         self.player.draw()
         self.building_manager.draw(camera=self.camera)
         self.bullet_manager.draw(camera=self.camera)
+        
+        self.enemy_manager.draw()
 
         if DEBUG:
             self.draw_debug_boxes()
-            
             if self.show_wall_wireframe:
                 self.wall_cube.draw_wireframe()
 
@@ -374,13 +445,20 @@ class Game:
     def draw_ui(self):
         draw_text(f"FPS: {get_fps()}", 10, 10, 20, Color(50, 255, 150, 255))
         
+        enemy_count = self.enemy_manager.get_enemy_count()
+        draw_text(f"ENEMIES: {enemy_count}", SCREEN_WIDTH - 150, 10, 20, Color(255, 100, 100, 255))
+
+        radar_mode = "ENHANCED" if self.player.radar_enhanced_mode else "STANDARD"
+        draw_text(f"RADAR: {radar_mode}", SCREEN_WIDTH - 150, 35, 16, Color(0, 255, 100, 255))
+        
         weapon_heat_ratio = self.weapon_heat / self.max_weapon_heat if self.max_weapon_heat > 0 else 0
         self.player.draw_hud(
             self.camera_pitch,
             self.camera_yaw,
             self.show_altitude_warning or self.show_boundary_warning,
             weapon_heat_ratio=weapon_heat_ratio,
-            is_overheated=self.is_overheated
+            is_overheated=self.is_overheated,
+            enemies=self.enemy_manager.get_enemies()
         )
 
         if self.show_altitude_warning:
@@ -423,12 +501,15 @@ class Game:
             if self.show_wall_wireframe:
                 draw_text("DEBUG: Wall Wireframe ON", 10, 160, 20, CYAN)
             
-            draw_text("DEBUG CONTROLS:", 10, SCREEN_HEIGHT - 240, 16, YELLOW)
-            draw_text("[LEFT CLICK] to shoot (hold for continuous)", 10, SCREEN_HEIGHT - 220, 14, WHITE)
-            draw_text("[G] to generate a new random city", 10, SCREEN_HEIGHT - 200, 14, WHITE)
-            draw_text("[B] to toggle AABB boxes", 10, SCREEN_HEIGHT - 180, 14, WHITE)
-            draw_text("[V] to toggle oriented plane box", 10, SCREEN_HEIGHT - 160, 14, WHITE)
-            draw_text("[N] to toggle wall wireframe", 10, SCREEN_HEIGHT - 140, 14, WHITE)
+            draw_text("DEBUG CONTROLS:", 10, SCREEN_HEIGHT - 300, 16, YELLOW)
+            draw_text("[LEFT CLICK] to shoot (hold for continuous)", 10, SCREEN_HEIGHT - 280, 14, WHITE)
+            draw_text("[TAB] to toggle enhanced radar mode", 10, SCREEN_HEIGHT - 260, 14, WHITE)
+            draw_text("[G] to generate a new random city", 10, SCREEN_HEIGHT - 240, 14, WHITE)
+            draw_text("[B] to toggle AABB boxes", 10, SCREEN_HEIGHT - 220, 14, WHITE)
+            draw_text("[V] to toggle oriented plane box", 10, SCREEN_HEIGHT - 200, 14, WHITE)
+            draw_text("[N] to toggle wall wireframe", 10, SCREEN_HEIGHT - 180, 14, WHITE)
+            draw_text("[E] to spawn enemy manually", 10, SCREEN_HEIGHT - 160, 14, WHITE)
+            draw_text("[R] to clear all enemies", 10, SCREEN_HEIGHT - 140, 14, WHITE)
             draw_text("[I] to test invulnerability", 10, SCREEN_HEIGHT - 120, 14, WHITE)
             draw_text("[C] to clear all bullets", 10, SCREEN_HEIGHT - 100, 14, WHITE)
 
@@ -439,10 +520,18 @@ class Game:
             bullet_status = "ON" if self.bullet_manager.instancing_enabled else "OFF"
             draw_text(f"Bullet Instancing: {bullet_status} - Active bullets: {self.bullet_manager.get_bullet_count()}", 10, SCREEN_HEIGHT - 40, 14, WHITE)
 
+            draw_text(f"Active Enemies: {enemy_count}", 10, SCREEN_HEIGHT - 20, 14, Color(255, 100, 100, 255))
+
+            y_offset = 400
+            for i, enemy in enumerate(self.enemy_manager.get_enemies()[:3]):
+                distance = vector3_distance(self.player.position, enemy.position)
+                info_text = f"Enemy {i+1}: {enemy.enemy_type} | {enemy.debug_info} | Dist: {distance:.1f}m"
+                draw_text(info_text, 10, y_offset + (i * 15), 12, ORANGE)
+
             if self.player.is_invulnerable:
-                draw_text("STATUS: INVULNERABLE", 10, SCREEN_HEIGHT - 20, 18, PURPLE)
+                draw_text("STATUS: INVULNERABLE", 10, 350, 18, PURPLE)
             else:
-                draw_text("STATUS: VULNERABLE", 10, SCREEN_HEIGHT - 20, 18, GREEN)
+                draw_text("STATUS: VULNERABLE", 10, 350, 18, GREEN)
 
 
     def cleanup(self):
