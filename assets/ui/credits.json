@@ -1,18 +1,33 @@
 [
     {
-        "name": "raylib",
-        "reason": "For the amazing core library",
-        "link": "https://www.raylib.com/"
+        "name": "Python Discord Server",
+        "reason": "For hosting this PyWeek 40!",
+        "link": "https://discord.gg/python"
     },
     {
-        "name": "clear-code-projects",
-        "reason": "For the custom Timer class inspiration",
+        "name": "Clear Code YT",
+        "reason": "For the custom Timer Class and raylib tutorial",
         "link": "https://github.com/clear-code-projects"
     },
     {
-        "name": "Quaternius",
-        "reason": "For providing awesome free 3D models",
-        "link": "https://quaternius.com/"
+        "name": "Maxparata",
+        "reason": "For the aricrafts models, go check them out!",
+        "link": "https://maxparata.itch.io/voxel-plane"
+    },
+    {
+        "name": "Mehrasaur",
+        "reason": "For the building models, here's the link",
+        "link": "https://mehrasaur.itch.io/voxel-buildings"
+    },
+    {
+        "name": "YukiPixels",
+        "reason": "For these beautiful font you are seeing",
+        "link": "https://yukipixels.itch.io/boldpixels"
+    },
+    {
+        "name": "ngrilly",
+        "reason": "For the raylib examples of Skybox in Zig",
+        "link": "https://github.com/ngrilly/zig3d/blob/master/src/Skybox.zig"
     },
     {
         "name": "You!",
