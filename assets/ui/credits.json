@@ -15,6 +15,11 @@
         "link": "https://maxparata.itch.io/voxel-plane"
     },
     {
+        "name": "Pixabay",
+        "reason": "Here you can find ALL the sound effects used in this game",
+        "link": "https://pixabay.com/"
+    },
+    {
         "name": "Mehrasaur",
         "reason": "For the building models, here's the link",
         "link": "https://mehrasaur.itch.io/voxel-buildings"
@@ -30,7 +35,7 @@
         "link": "https://github.com/ngrilly/zig3d/blob/master/src/Skybox.zig"
     },
     {
-        "name": "You!",
+        "name": "Of course, you!",
         "reason": "For playing this game!",
         "link": ""
     }
