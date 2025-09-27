@@ -2,18 +2,18 @@ from settings import *
 
 
 class Model:
-    def __init__(self, model, speed, position, direction = Vector3(), rotation_angle=0.0):
+    def __init__(self, model, speed, position, direction=Vector3(), rotation_angle=0.0):
         self.model = model
         self.speed = speed
         self.position = position
         self.direction = direction
         self.rotation_angle = rotation_angle
         self.size = 1
-        
+
         # collision system
         self.collision_box = BoundingBox(
             Vector3(-1, -1, -1),  # min
-            Vector3(1, 1, 1)      # max
+            Vector3(1, 1, 1)  # max
         )
         self.has_collision = True  # for simple models
         self.has_multiple_collision_boxes = False  # for complex models
@@ -26,20 +26,28 @@ class Model:
             matrix_rotate_y(radians(self.rotation_angle)),
             matrix_translate(self.position.x, self.position.y, self.position.z)
         )
-        
+
         local_corners = [
-            Vector3(self.collision_box.min.x * self.size, self.collision_box.min.y * self.size, self.collision_box.min.z * self.size),
-            Vector3(self.collision_box.max.x * self.size, self.collision_box.min.y * self.size, self.collision_box.min.z * self.size),
-            Vector3(self.collision_box.min.x * self.size, self.collision_box.max.y * self.size, self.collision_box.min.z * self.size),
-            Vector3(self.collision_box.max.x * self.size, self.collision_box.max.y * self.size, self.collision_box.min.z * self.size),
-            Vector3(self.collision_box.min.x * self.size, self.collision_box.min.y * self.size, self.collision_box.max.z * self.size),
-            Vector3(self.collision_box.max.x * self.size, self.collision_box.min.y * self.size, self.collision_box.max.z * self.size),
-            Vector3(self.collision_box.min.x * self.size, self.collision_box.max.y * self.size, self.collision_box.max.z * self.size),
-            Vector3(self.collision_box.max.x * self.size, self.collision_box.max.y * self.size, self.collision_box.max.z * self.size)
+            Vector3(self.collision_box.min.x * self.size, self.collision_box.min.y * self.size,
+                    self.collision_box.min.z * self.size),
+            Vector3(self.collision_box.max.x * self.size, self.collision_box.min.y * self.size,
+                    self.collision_box.min.z * self.size),
+            Vector3(self.collision_box.min.x * self.size, self.collision_box.max.y * self.size,
+                    self.collision_box.min.z * self.size),
+            Vector3(self.collision_box.max.x * self.size, self.collision_box.max.y * self.size,
+                    self.collision_box.min.z * self.size),
+            Vector3(self.collision_box.min.x * self.size, self.collision_box.min.y * self.size,
+                    self.collision_box.max.z * self.size),
+            Vector3(self.collision_box.max.x * self.size, self.collision_box.min.y * self.size,
+                    self.collision_box.max.z * self.size),
+            Vector3(self.collision_box.min.x * self.size, self.collision_box.max.y * self.size,
+                    self.collision_box.max.z * self.size),
+            Vector3(self.collision_box.max.x * self.size, self.collision_box.max.y * self.size,
+                    self.collision_box.max.z * self.size)
         ]
 
         world_corners = [vector3_transform(corner, transform_matrix) for corner in local_corners]
-        
+
         min_p = Vector3(min(c.x for c in world_corners), min(c.y for c in world_corners), min(c.z for c in world_corners))
         max_p = Vector3(max(c.x for c in world_corners), max(c.y for c in world_corners), max(c.z for c in world_corners))
 
@@ -48,26 +56,26 @@ class Model:
     def check_collision_with(self, other_model):
         if not self.has_collision or not other_model.has_collision:
             return False
-        
+
         if hasattr(other_model, 'has_multiple_collision_boxes') and other_model.has_multiple_collision_boxes:
             other_boxes = other_model.get_world_bounding_boxes()
             my_box = self.get_world_bounding_box()
-            
+
             if my_box is None:
                 return False
-                
+
             for other_box in other_boxes:
                 if check_collision_boxes(my_box, other_box):
                     return True
         else:
             my_box = self.get_world_bounding_box()
             other_box = other_model.get_world_bounding_box()
-            
+
             if my_box is None or other_box is None:
                 return False
-                
+
             return check_collision_boxes(my_box, other_box)
-        
+
         return False
 
     def move(self, dt):
@@ -77,9 +85,10 @@ class Model:
 
     def update(self, dt):
         self.move(dt)
-    
+
     def draw(self):
-        draw_model_ex(self.model, self.position, Vector3(0, 1, 0), self.rotation_angle, Vector3(self.size, self.size, self.size), WHITE)
+        draw_model_ex(self.model, self.position, Vector3(0, 1, 0), self.rotation_angle,
+                      Vector3(self.size, self.size, self.size), WHITE)
 
 
 class SkyscraperSimple(Model):
@@ -88,13 +97,14 @@ class SkyscraperSimple(Model):
     Original measurements from Blender:
     - X: 40.8741m (width), Y: 22.88m (depth), Z: 70.4m (height)
     """
+
     def __init__(self, model, position, rotation_angle=0.0):
         super().__init__(model, 0, position, Vector3(), rotation_angle=rotation_angle)
         # Blender: X=width, Y=depth, Z=height
         # Raylib: X=width, Y=height, Z=depth
         self.collision_box = BoundingBox(
-            Vector3(-20.43705, -5, -11.44),  
-            Vector3(20.43705, 70.4, 11.44)  
+            Vector3(-20.43705, -5, -11.44),
+            Vector3(20.43705, 70.4, 11.44)
         )
         self.has_collision = True
         self.has_multiple_collision_boxes = False
@@ -108,39 +118,39 @@ class SkycraperMultipleLayer(Model):
     - second floor: X 21.14m, Y 21.14m, Z 26.4m  
     - antenna: X 2.8359m, Y 2.81107m, Z 34.9m
     """
+
     def __init__(self, model, position, rotation_angle=0.0):
         super().__init__(model, 0, position, Vector3(), rotation_angle=rotation_angle)
         # blender: X=width, Y=depth, Z=height
         # raylib: X=width, Y=height, Z=depth
         self.collision_boxes = [
-            # base: 30.2m x 30.2m x 67.6m 
+            # base: 30.2m x 30.2m x 67.6m
             BoundingBox(
                 Vector3(-15.1, -5, -15.1),
-                Vector3(15.1, 67.6, 15.1)  
+                Vector3(15.1, 67.6, 15.1)
             ),
-            
-            # second floor: 21.14m x 21.14m x 26.4m 
+
+            # second floor: 21.14m x 21.14m x 26.4m
             # starts where first floor ends (Y=67.6)
             BoundingBox(
-                Vector3(-10.57, 67.6, -10.57), 
+                Vector3(-10.57, 67.6, -10.57),
                 Vector3(10.57, 94.0, 10.57)
             ),
 
             # antenna: 2.84m x 2.81m x 34.9m
             # starts where second floor ends (Y=94.0)
             BoundingBox(
-                Vector3(-1.42, 94.0, -1.41), 
-                Vector3(1.42, 128.9, 1.41) 
+                Vector3(-1.42, 94.0, -1.41),
+                Vector3(1.42, 128.9, 1.41)
             )
         ]
-        
+
         self.has_multiple_collision_boxes = True
-    
 
     def get_world_bounding_boxes(self):
         if not self.has_collision:
             return []
-            
+
         world_boxes = []
         transform_matrix = matrix_multiply(
             matrix_rotate_y(radians(self.rotation_angle)),
@@ -158,16 +168,18 @@ class SkycraperMultipleLayer(Model):
                 Vector3(box.min.x * self.size, box.max.y * self.size, box.max.z * self.size),
                 Vector3(box.max.x * self.size, box.max.y * self.size, box.max.z * self.size)
             ]
-            
+
             world_corners = [vector3_transform(corner, transform_matrix) for corner in local_corners]
-            
-            min_p = Vector3(min(c.x for c in world_corners), min(c.y for c in world_corners), min(c.z for c in world_corners))
-            max_p = Vector3(max(c.x for c in world_corners), max(c.y for c in world_corners), max(c.z for c in world_corners))
-            
+
+            min_p = Vector3(min(c.x for c in world_corners), min(c.y for c in world_corners),
+                            min(c.z for c in world_corners))
+            max_p = Vector3(max(c.x for c in world_corners), max(c.y for c in world_corners),
+                            max(c.z for c in world_corners))
+
             world_boxes.append(BoundingBox(min_p, max_p))
-        
+
         return world_boxes
-    
+
 
 class Fog(Model):
     def __init__(self, camera, size=50, segments=50):
@@ -176,9 +188,9 @@ class Fog(Model):
 
         vs_path = join("shaders", "fog", "fog.vs")
         fs_path = join("shaders", "fog", "fog.fs")
-        
+
         if not exists(vs_path) or not exists(fs_path):
-            print(f"Warning: Shader files not found:")
+            print("Warning: Shader files not found:")
             print(f"  Vertex shader: {vs_path} - {'[*]' if exists(vs_path) else '[✗]'}")
             print(f"  Fragment shader: {fs_path} - {'[*]' if exists(fs_path) else '[✗]'}")
             print("Using basic rendering...")
@@ -189,7 +201,7 @@ class Fog(Model):
                 self.shader = load_shader(vs_path, fs_path)
                 self.shader_loaded = True
                 print("[*] Shaders loaded successfully")
-                
+
                 self.time_loc = get_shader_location(self.shader, "time")
                 self.view_pos_loc = get_shader_location(self.shader, "viewPos")
                 self.fog_density_loc = get_shader_location(self.shader, "fogDensity")
@@ -197,18 +209,18 @@ class Fog(Model):
                 self.fog_scale_loc = get_shader_location(self.shader, "fogScale")
                 self.fog_height_loc = get_shader_location(self.shader, "fogHeight")
                 self.fog_color_loc = get_shader_location(self.shader, "fogColor")
-                
+
             except Exception as e:
                 print(f"[x] Error loading shaders: {e}")
                 self.shader_loaded = False
                 self.shader = None
-        
+
         self.fog_density = 0.8
         self.fog_speed = 0.5
         self.fog_scale = 4.0
         self.fog_height = 2.0
         self.fog_color = Vector3(0.9, 0.95, 1.0)
-        
+
         self.camera = camera
 
         super().__init__(model, 0, Vector3(0, 0, 0), Vector3())
@@ -218,29 +230,27 @@ class Fog(Model):
         if self.shader_loaded:
             self.model.materials[0].shader = self.shader
             self._update_shader_uniforms()
-    
 
     def _update_shader_uniforms(self):
         if not self.shader_loaded:
             return
-            
+
         density_ptr = ffi.new('float *', self.fog_density)
-        speed_ptr = ffi.new('float *', self.fog_speed) 
+        speed_ptr = ffi.new('float *', self.fog_speed)
         scale_ptr = ffi.new('float *', self.fog_scale)
         height_ptr = ffi.new('float *', self.fog_height)
         color_ptr = ffi.new('float[3]', [self.fog_color.x, self.fog_color.y, self.fog_color.z])
-        
-        set_shader_value(self.shader, self.fog_density_loc, 
-                        density_ptr, SHADER_UNIFORM_FLOAT)
-        set_shader_value(self.shader, self.fog_speed_loc, 
-                        speed_ptr, SHADER_UNIFORM_FLOAT)
-        set_shader_value(self.shader, self.fog_scale_loc, 
-                        scale_ptr, SHADER_UNIFORM_FLOAT)
-        set_shader_value(self.shader, self.fog_height_loc, 
-                        height_ptr, SHADER_UNIFORM_FLOAT)
-        set_shader_value(self.shader, self.fog_color_loc, 
-                        color_ptr, SHADER_UNIFORM_VEC3)
-    
+
+        set_shader_value(self.shader, self.fog_density_loc,
+                         density_ptr, SHADER_UNIFORM_FLOAT)
+        set_shader_value(self.shader, self.fog_speed_loc,
+                         speed_ptr, SHADER_UNIFORM_FLOAT)
+        set_shader_value(self.shader, self.fog_scale_loc,
+                         scale_ptr, SHADER_UNIFORM_FLOAT)
+        set_shader_value(self.shader, self.fog_height_loc,
+                         height_ptr, SHADER_UNIFORM_FLOAT)
+        set_shader_value(self.shader, self.fog_color_loc,
+                         color_ptr, SHADER_UNIFORM_VEC3)
 
     def set_fog_parameters(self, density=None, speed=None, scale=None, height=None, color=None):
         if density is not None:
@@ -253,12 +263,12 @@ class Fog(Model):
             self.fog_height = height
         if color is not None:
             self.fog_color = color
-        
+
         self._update_shader_uniforms()
-    
+
     def update(self, dt):
         super().update(dt)
-        
+
         if not self.shader_loaded:
             return
 
@@ -268,17 +278,15 @@ class Fog(Model):
 
         view_pos_ptr = ffi.new('float[3]', [self.camera.position.x, self.camera.position.y, self.camera.position.z])
         set_shader_value(self.shader, self.view_pos_loc, view_pos_ptr, SHADER_UNIFORM_VEC3)
-    
 
     def draw(self):
         begin_blend_mode(BLEND_ALPHA)
-        
+
         if self.shader_loaded:
             draw_model(self.model, self.position, self.size, WHITE)
         else:
             draw_model(self.model, self.position, self.size, Color(200, 220, 255, 80))
         end_blend_mode()
-    
 
     def __del__(self):
         if hasattr(self, 'shader') and self.shader is not None:
@@ -287,60 +295,59 @@ class Fog(Model):
 
 class WallCube:
     """Creates a hollow cube."""
+
     def __init__(self, size=600, height=200):
         self.size = size
         self.height = height
         self.half_size = size / 2
         self.wall_thickness = 10.0
-        
+
         self.wall_color = Color(80, 120, 160, 150)
-    
 
     def draw(self):
         begin_blend_mode(BLEND_ALPHA)
-        
+
         draw_cube(
-            Vector3(0, self.height/2, self.half_size),
+            Vector3(0, self.height / 2, self.half_size),
             self.size, self.height, self.wall_thickness,
             self.wall_color
         )
 
         draw_cube(
-            Vector3(0, self.height/2, -self.half_size),
+            Vector3(0, self.height / 2, -self.half_size),
             self.size, self.height, self.wall_thickness,
             self.wall_color
         )
 
         draw_cube(
-            Vector3(self.half_size, self.height/2, 0),
+            Vector3(self.half_size, self.height / 2, 0),
             self.wall_thickness, self.height, self.size,
             self.wall_color
         )
 
         draw_cube(
-            Vector3(-self.half_size, self.height/2, 0),
+            Vector3(-self.half_size, self.height / 2, 0),
             self.wall_thickness, self.height, self.size,
             self.wall_color
         )
-        
+
         end_blend_mode()
-    
 
     def draw_wireframe(self):
         wall_color = Color(100, 150, 200, 255)
 
         bottom_corners = [
             Vector3(-self.half_size, 0, -self.half_size),  # SW
-            Vector3(self.half_size, 0, -self.half_size),   # SE
-            Vector3(self.half_size, 0, self.half_size),    # NE
-            Vector3(-self.half_size, 0, self.half_size)    # NW
+            Vector3(self.half_size, 0, -self.half_size),  # SE
+            Vector3(self.half_size, 0, self.half_size),  # NE
+            Vector3(-self.half_size, 0, self.half_size)  # NW
         ]
 
         top_corners = [
             Vector3(-self.half_size, self.height, -self.half_size),  # SW
-            Vector3(self.half_size, self.height, -self.half_size),   # SE
-            Vector3(self.half_size, self.height, self.half_size),    # NE
-            Vector3(-self.half_size, self.height, self.half_size)    # NW
+            Vector3(self.half_size, self.height, -self.half_size),  # SE
+            Vector3(self.half_size, self.height, self.half_size),  # NE
+            Vector3(-self.half_size, self.height, self.half_size)  # NW
         ]
 
         for i in range(4):
@@ -348,32 +355,31 @@ class WallCube:
 
         for i in range(4):
             draw_line_3d(top_corners[i], top_corners[(i + 1) % 4], wall_color)
- 
+
         for i in range(4):
             draw_line_3d(bottom_corners[i], top_corners[i], wall_color)
-    
 
     def get_collision_walls(self):
         collision_walls = []
 
         collision_walls.append(BoundingBox(
-            Vector3(-self.half_size, 0, self.half_size - self.wall_thickness/2),
-            Vector3(self.half_size, self.height, self.half_size + self.wall_thickness/2)
+            Vector3(-self.half_size, 0, self.half_size - self.wall_thickness / 2),
+            Vector3(self.half_size, self.height, self.half_size + self.wall_thickness / 2)
         ))
 
         collision_walls.append(BoundingBox(
-            Vector3(-self.half_size, 0, -self.half_size - self.wall_thickness/2),
-            Vector3(self.half_size, self.height, -self.half_size + self.wall_thickness/2)
+            Vector3(-self.half_size, 0, -self.half_size - self.wall_thickness / 2),
+            Vector3(self.half_size, self.height, -self.half_size + self.wall_thickness / 2)
         ))
 
         collision_walls.append(BoundingBox(
-            Vector3(self.half_size - self.wall_thickness/2, 0, -self.half_size),
-            Vector3(self.half_size + self.wall_thickness/2, self.height, self.half_size)
+            Vector3(self.half_size - self.wall_thickness / 2, 0, -self.half_size),
+            Vector3(self.half_size + self.wall_thickness / 2, self.height, self.half_size)
         ))
 
         collision_walls.append(BoundingBox(
-            Vector3(-self.half_size - self.wall_thickness/2, 0, -self.half_size),
-            Vector3(-self.half_size + self.wall_thickness/2, self.height, self.half_size)
+            Vector3(-self.half_size - self.wall_thickness / 2, 0, -self.half_size),
+            Vector3(-self.half_size + self.wall_thickness / 2, self.height, self.half_size)
         ))
-        
+
         return collision_walls

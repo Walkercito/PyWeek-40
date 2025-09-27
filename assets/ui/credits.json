@@ -1,0 +1,22 @@
+[
+    {
+        "name": "raylib",
+        "reason": "For the amazing core library",
+        "link": "https://www.raylib.com/"
+    },
+    {
+        "name": "clear-code-projects",
+        "reason": "For the custom Timer class inspiration",
+        "link": "https://github.com/clear-code-projects"
+    },
+    {
+        "name": "Quaternius",
+        "reason": "For providing awesome free 3D models",
+        "link": "https://quaternius.com/"
+    },
+    {
+        "name": "You!",
+        "reason": "For playing this game!",
+        "link": ""
+    }
+]
