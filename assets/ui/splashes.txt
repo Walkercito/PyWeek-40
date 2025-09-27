@@ -6,3 +6,84 @@ Awesome!
 Powered by raylib!
 Dogfight time!
 Pull up!
+Now with 100% more explosions!
+Dodge buildings like a pro!
+Sky-high entertainment!
+Warning: May cause motion sickness!
+No pilots were harmed!
+Radar not included in real life!
+Flying since PyWeek 40!
+Boost responsibly!
+Altitude matters!
+Buildings are not suggestions!
+Enemy AI almost too smart!
+Made with excessive caffeine!
+Contains traces of polygons!
+Shader-powered fun!
+Now with 50% more vertices!
+Tested by actual pilots!
+Not a flight simulator!
+Physics may vary!
+No real buildings harmed!
+Side effects include fun!
+Warning: Highly addictive!
+Now in 3D-O-Vision!
+Pixels hand-crafted!
+Gravity is just a suggestion!
+print('Hello, Sky!')
+while(flying): shoot()
+No memory leaks detected!
+Compiled with love!
+Git commit -m 'Added explosions'
+TODO: Add more missiles
+Exception: BuildingNotFound
+if enemy_spotted: attack()
+Powered by Python magic!
+No segfaults here!
+100% organic code!
+OVERHEATED!!
+Press F to pay respects!
+It's dangerous to go alone!
+The cake is a lie!
+All your base belong to us!
+A winner is you!
+Insert coin to continue!
+Game over, man!
+Would you kindly fly?
+Do a barrel roll!
+Achievement unlocked!
+Made in exactly 7 days!
+:D
+Raylib makes everything better!
+Crunch time was real!
+Sleep is for the weak!
+Debugged at 3 AM! (not jocking)
+Features bugs as features
+<3
+Made with pure determination!
+Coffee-driven development!
+Last minute commits included!
+Mayday! Mayday!
+Roger that, control!
+Fox Two! Fox Two!
+Engaging hostiles!
+Requesting backup!
+Cleared for takeoff!
+Incoming bogeys!
+Break left! Break left!
+Splash one bandit!
+RTB immediately!
+Check your six!
+Going ballistic!
+Made from 100% recycled pixels!
+Gluten-free gaming!
+No microtransactions!
+DLC sold separately (just kidding)!
+Not compatible with toasters!
+May cause excessive fun!
+Batteries not included!
+Some assembly required!
+Professional driver on closed course!
+Individual results may vary!
+Not suitable for actual flight!
+Void where prohibited!
