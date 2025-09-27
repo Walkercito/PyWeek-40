@@ -50,9 +50,11 @@ class Player(Model):
         self.radar_sweep_angle = 0.0 
         self.radar_ping_timer = Timer(2.0, repeat=True, autostart=True) 
 
+        self.is_dying = False
 
-    def take_damage(self, amount):
-        if self.is_invulnerable:
+
+    def take_damage(self, amount, on_death=None):
+        if self.is_invulnerable or self.is_dying:
             return
         self.health -= amount
         if self.health < 0:
@@ -61,9 +63,18 @@ class Player(Model):
         if DEBUG:
             print(f"Player took {amount} damage, {self.health} HP remaining.")
         
-        if self.health <= 0:
-            self.start_invulnerability("Fatal damage")
-            self.health = self.max_health
+        if self.health <= 0 and not self.is_dying:
+            self.is_dying = True
+            self.is_visible = False 
+            if on_death:
+                on_death() 
+
+    def respawn(self):
+        if DEBUG:
+            print("Player respawning...")
+        self.is_dying = False
+        self.health = self.max_health
+        self.start_invulnerability("Respawn")
 
 
     def start_invulnerability(self, reason="collision"):
@@ -137,7 +148,7 @@ class Player(Model):
         return world_corners
 
     def get_world_bounding_box(self):
-        if not self.has_collision or self.is_invulnerable:
+        if not self.has_collision or self.is_invulnerable or self.is_dying:
             return None
         
         corners = self.get_rotated_bbox_corners()
@@ -159,8 +170,7 @@ class Player(Model):
 
 
     def check_collision_with(self, other_model):
-        """Collision check - does not collide if invulnerable"""
-        if not self.has_collision or not other_model.has_collision or self.is_invulnerable:
+        if not self.has_collision or not other_model.has_collision or self.is_invulnerable or self.is_dying:
             return False
         
         my_box = self.get_world_bounding_box()
@@ -279,6 +289,9 @@ class Player(Model):
 
 
     def update(self, dt, forward_vector, mouse_dx):
+        if self.is_dying:
+            return 
+
         self.update_invulnerability()
         self.update_boost_drained_message()
         self.check_fog_collision()
@@ -474,6 +487,7 @@ class Player(Model):
             boost_text = "BOOST DRAINED!"
             text_width = measure_text(boost_text, 30)
             draw_text(boost_text, center_x - text_width // 2, center_y + 120, 30, warning_color)
+
 
     def draw_advanced_radar(self, camera_yaw, hud_color, enemies):
         radar_center = Vector2(SCREEN_WIDTH - 130, SCREEN_HEIGHT - 140)

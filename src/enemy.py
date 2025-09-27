@@ -1,5 +1,4 @@
 from settings import *
-
 from models import Model
 import random
 
@@ -28,6 +27,7 @@ class Enemy(Model):
     """AI enemy aircraft#"""
     def __init__(self, model, position, enemy_type="fighter"):
         super().__init__(model, speed=20, position=position)
+        self.transform = matrix_identity()
         
         if self.model is None:
             if DEBUG:
@@ -38,25 +38,22 @@ class Enemy(Model):
 
         self.enemy_configs = {
             "fighter": {
-                "max_speed": 22.0,
-                "acceleration": 8.0,
-                "max_health": 120,
-                "aggressiveness": 0.8,
-                "skill_level": 0.7
+                "max_speed": 25.0, "acceleration": 9.0, "max_health": 120,
+                "aggressiveness": 0.9, "skill_level": 0.7,
+                "bullet_type": "normal", "shoot_cooldown": 0.8,
+                "burst_count": 3, "burst_delay": 0.2
             },
             "interceptor": {
-                "max_speed": 28.0,
-                "acceleration": 12.0,
-                "max_health": 80,
-                "aggressiveness": 0.9,
-                "skill_level": 0.8
+                "max_speed": 32.0, "acceleration": 14.0, "max_health": 80,
+                "aggressiveness": 1.0, "skill_level": 0.8,
+                "bullet_type": "rapid", "shoot_cooldown": 1.2,
+                "burst_count": 6, "burst_delay": 0.1
             },
             "bomber": {
-                "max_speed": 16.0,
-                "acceleration": 5.0,
-                "max_health": 200,
-                "aggressiveness": 0.3,
-                "skill_level": 0.5
+                "max_speed": 18.0, "acceleration": 6.0, "max_health": 250,
+                "aggressiveness": 0.6, "skill_level": 0.5,
+                "bullet_type": "heavy", "shoot_cooldown": 1.5,
+                "burst_count": 1, "burst_delay": 0.0
             }
         }
         
@@ -69,13 +66,22 @@ class Enemy(Model):
         self.health = self.max_health
         self.aggressiveness = config["aggressiveness"]
         self.skill_level = config["skill_level"]
+        self.bullet_type = config["bullet_type"]
+        self.shoot_cooldown = Timer(config["shoot_cooldown"])
+        
+        self.burst_count = config["burst_count"]
+        self.burst_delay = config["burst_delay"]
+        self.is_in_burst = False
+        self.shots_in_burst_left = 0
+        self.burst_timer = Timer(self.burst_delay)
+
 
         self.velocity = Vector3(0, 0, 0)
         self.target_direction = Vector3(0, 0, 1)
         self.drag = 0.7
 
         self.ai_state = AIState.PATROL
-        self.state_timer = Timer(3.0)
+        self.state_timer = Timer(2.0)
         self.decision_timer = Timer(0.5)
 
         self.is_boosting = False
@@ -101,8 +107,8 @@ class Enemy(Model):
 
         self.player_threat_level = 0.0
         self.last_player_position = Vector3(0, 0, 0)
-        self.detection_range = 300.0
-        self.attack_range = 150.0
+        self.detection_range = 500.0
+        self.attack_range = 250.0
         self.retreat_threshold = 0.3
 
         self.stress_level = 0.0
@@ -112,8 +118,8 @@ class Enemy(Model):
             Vector3(-4.0, -2.0, -6.0), 
             Vector3(4.0, 2.0, 6.0)
         )
-        self.avoidance_range = 50.0
-        self.emergency_avoidance_range = 25.0
+        self.avoidance_range = 100.0
+        self.emergency_avoidance_range = 50.0
 
         self.debug_target = Vector3(0, 0, 0)
         self.debug_info = ""
@@ -179,6 +185,9 @@ class Enemy(Model):
     
 
     def calculate_desired_direction(self, player_position, spatial_grid):
+        emergency_avoidance = self.calculate_emergency_avoidance(spatial_grid)
+        if vector3_length_sqr(emergency_avoidance) > 0.1:
+            return emergency_avoidance
         desired_direction = Vector3(0, 0, 0)
         
         if self.ai_state == AIState.PATROL:
@@ -192,8 +201,8 @@ class Enemy(Model):
         elif self.ai_state == AIState.RETREAT:
             desired_direction = self.retreat_behavior(player_position)
         
-        avoidance = self.calculate_avoidance(spatial_grid)
-        desired_direction = vector3_add(desired_direction, avoidance)
+        general_avoidance = self.calculate_general_avoidance(spatial_grid)
+        desired_direction = vector3_add(desired_direction, general_avoidance)
         
         boundary_avoidance = self.calculate_boundary_avoidance()
         desired_direction = vector3_add(desired_direction, boundary_avoidance)
@@ -209,7 +218,6 @@ class Enemy(Model):
         distance_to_center = vector3_length(to_center)
         
         if distance_to_center > self.patrol_radius:
-            # go back to the center 
             return vector3_normalize(to_center)
         else:
             if distance_to_center < 50:
@@ -256,6 +264,52 @@ class Enemy(Model):
         else:
             return self.chase_behavior(player_position)
     
+    def handle_shooting(self, player_position, bullet_manager):
+        if self.is_in_burst:
+            if not self.burst_timer:
+                if self.shots_in_burst_left > 0:
+                    self.fire_one_shot(player_position, bullet_manager)
+                    self.shots_in_burst_left -= 1
+                    if self.shots_in_burst_left > 0:
+                        self.burst_timer.activate()
+                    else:
+                        self.is_in_burst = False
+                else:
+                    self.is_in_burst = False
+            return
+
+        if self.shoot_cooldown:
+            return
+
+        to_player = vector3_normalize(vector3_subtract(player_position, self.position))
+        forward = vector3_normalize(self.velocity)
+        if vector3_length_sqr(forward) < 0.01:
+            return
+
+        if vector3_dot_product(forward, to_player) > 0.85:
+            self.is_in_burst = True
+            self.shots_in_burst_left = self.burst_count
+            self.shoot_cooldown.activate()
+            
+            self.fire_one_shot(player_position, bullet_manager)
+            self.shots_in_burst_left -= 1
+            if self.shots_in_burst_left > 0:
+                self.burst_timer.activate()
+
+    def fire_one_shot(self, player_position, bullet_manager):
+        inaccuracy = (1.0 - self.skill_level) * 0.1
+        direction_to_player = vector3_normalize(vector3_subtract(player_position, self.position))
+        
+        offset = Vector3(
+            uniform(-inaccuracy, inaccuracy),
+            uniform(-inaccuracy, inaccuracy),
+            uniform(-inaccuracy, inaccuracy)
+        )
+        final_direction = vector3_normalize(vector3_add(direction_to_player, offset))
+
+        shoot_position = vector3_add(self.position, vector3_scale(final_direction, 6.0))
+        bullet_manager.add_bullet(shoot_position, final_direction, self.bullet_type)
+
 
     def evade_behavior(self, player_position):
         away_from_player = vector3_subtract(self.position, player_position)
@@ -307,22 +361,22 @@ class Enemy(Model):
         maneuver_time = get_time()
         
         if self.current_maneuver == ManeuverType.CIRCLE_LEFT:
-            self.target_roll = -25  # Roll menos extremo
-            angle = maneuver_time * 1.5  # Más lento
+            self.target_roll = -25
+            angle = maneuver_time * 1.5
             return Vector3(cos(angle) * 0.8, 0, sin(angle) * 0.8)
             
         elif self.current_maneuver == ManeuverType.CIRCLE_RIGHT:
-            self.target_roll = 25  # Roll menos extremo
-            angle = maneuver_time * -1.5  # Más lento
+            self.target_roll = 25
+            angle = maneuver_time * -1.5
             return Vector3(cos(angle) * 0.8, 0, sin(angle) * 0.8)
             
         elif self.current_maneuver == ManeuverType.CLIMB:
             self.target_roll = 0
-            return Vector3(0, 0.7, 0.3)  # Subida más gradual
+            return Vector3(0, 0.7, 0.3)
             
         elif self.current_maneuver == ManeuverType.DIVE:
             self.target_roll = 0
-            return Vector3(0, -0.3, 0.7)  # Bajada más gradual
+            return Vector3(0, -0.3, 0.7)
             
         elif self.current_maneuver == ManeuverType.BARREL_ROLL:
             roll_progress = (get_time() - self.maneuver_timer.start_time) * 2.0 
@@ -345,32 +399,44 @@ class Enemy(Model):
         
         self.last_player_position = Vector3(player_position.x, player_position.y, player_position.z)
         return predicted_position
-    
 
-    def calculate_avoidance(self, spatial_grid):
-        if not spatial_grid:
-            return Vector3(0, 0, 0)
+
+    def calculate_emergency_avoidance(self, spatial_grid):
+        if not spatial_grid: return Vector3(0, 0, 0)
+
+        forward_vector = vector3_normalize(self.velocity)
+        if vector3_length_sqr(forward_vector) < 0.01: return Vector3(0, 0, 0)
         
         potential_colliders = spatial_grid.get_potential_colliders(self.position)
-        avoidance_vector = Vector3(0, 0, 0)
-        
         for obj in potential_colliders:
-            obj_pos = obj.position
-            distance = vector3_distance(self.position, obj_pos)
-            
-            if distance < self.avoidance_range and distance > 0:
-                away_vector = vector3_subtract(self.position, obj_pos)
-                away_vector = vector3_normalize(away_vector)
-                
+            distance = vector3_distance(self.position, obj.position)
+            if distance < self.emergency_avoidance_range:
+                to_obstacle = vector3_normalize(vector3_subtract(obj.position, self.position))
+
+                if vector3_dot_product(forward_vector, to_obstacle) > 0.8:
+                    self.ai_state = AIState.EMERGENCY 
+                    away_vector = vector3_normalize(vector3_subtract(self.position, obj.position))
+                    return vector3_normalize(Vector3(away_vector.x, 0.8, away_vector.z))
+        
+        return Vector3(0, 0, 0) 
+
+
+    def calculate_general_avoidance(self, spatial_grid):
+        if not spatial_grid: return Vector3(0, 0, 0)
+        
+        avoidance_vector = Vector3(0, 0, 0)
+        potential_colliders = spatial_grid.get_potential_colliders(self.position)
+        for obj in potential_colliders:
+            distance = vector3_distance(self.position, obj.position)
+            if 0 < distance < self.avoidance_range:
+                away_vector = vector3_normalize(vector3_subtract(self.position, obj.position))
                 avoidance_strength = 1.0 - (distance / self.avoidance_range)
-                if distance < self.emergency_avoidance_range:
-                    avoidance_strength *= 3.0
-                
                 scaled_avoidance = vector3_scale(away_vector, avoidance_strength)
                 avoidance_vector = vector3_add(avoidance_vector, scaled_avoidance)
         
         return avoidance_vector
     
+
     def calculate_boundary_avoidance(self):
         boundary_limit = CITY_RADIUS - 50.0
         distance_from_center = sqrt(self.position.x**2 + self.position.z**2)
@@ -393,6 +459,7 @@ class Enemy(Model):
         
         return Vector3(0, 0, 0)
     
+
     def use_boost_if_needed(self):
         if self.current_boost_time > 1.0 and not self.is_boosting:
             if (self.ai_state in [AIState.EVADE, AIState.RETREAT] or 
@@ -436,14 +503,19 @@ class Enemy(Model):
         self.roll_angle += (self.target_roll - self.roll_angle) * self.roll_speed * dt
     
 
-    def update(self, dt, player_position, spatial_grid=None):
+    def update(self, dt, player_position, spatial_grid=None, bullet_manager=None):
         self.update_ai_state(player_position, dt)
         self.update_boost(dt)
-        
+        self.shoot_cooldown.update()
+        self.burst_timer.update()
+
         desired_direction = self.calculate_desired_direction(player_position, spatial_grid)
         self.update_physics(dt, desired_direction)
         self.update_model_transform()
         
+        if self.ai_state in [AIState.ATTACK, AIState.CHASE, AIState.PATROL, AIState.EVADE] and bullet_manager:
+            self.handle_shooting(player_position, bullet_manager)
+
         if DEBUG:
             self.debug_info = f"{self.ai_state.value} | Stress: {self.stress_level:.1f} | HP: {self.health}"
     
@@ -459,31 +531,19 @@ class Enemy(Model):
         
         world_up = Vector3(0, 1, 0)
 
-        right = vector3_normalize(vector3_cross_product(world_up, forward))
-        up = vector3_normalize(vector3_cross_product(forward, right))
+        right = vector3_normalize(vector3_cross_product(forward, world_up))
+        up = vector3_normalize(vector3_cross_product(right, forward))
 
-        roll_rad = radians(self.roll_angle * 0.5)
+        roll_rad = radians(self.roll_angle)
 
-        cos_roll = cos(roll_rad)
-        sin_roll = sin(roll_rad)
+        rolled_up = vector3_rotate_by_axis_angle(up, forward, roll_rad)
+        rolled_right = vector3_rotate_by_axis_angle(right, forward, roll_rad)
         
-        rolled_right = Vector3(
-            right.x * cos_roll - up.x * sin_roll,
-            right.y * cos_roll - up.y * sin_roll,
-            right.z * cos_roll - up.z * sin_roll
-        )
-        
-        rolled_up = Vector3(
-            right.x * sin_roll + up.x * cos_roll,
-            right.y * sin_roll + up.y * cos_roll,
-            right.z * sin_roll + up.z * cos_roll
-        )
-
-        self.model.transform = Matrix(
-            rolled_right.x, rolled_up.x, forward.x, self.position.x,
-            rolled_right.y, rolled_up.y, forward.y, self.position.y,
-            rolled_right.z, rolled_up.z, forward.z, self.position.z,
-            0.0, 0.0, 0.0, 1.0
+        self.transform = Matrix(
+            rolled_right.x, rolled_up.x, -forward.x, self.position.x,
+            rolled_right.y, rolled_up.y, -forward.y, self.position.y,
+            rolled_right.z, rolled_up.z, -forward.z, self.position.z,
+            0.0,            0.0,         0.0,          1.0
         )
     
     def draw(self):
@@ -491,9 +551,13 @@ class Enemy(Model):
             if DEBUG:
                 print(f"[WARNING] Enemy at {self.position.x:.1f}, {self.position.y:.1f}, {self.position.z:.1f} has no model!")
             draw_cube(self.position, 4.0, 2.0, 6.0, Color(255, 0, 255, 150)) 
-        else:
-            draw_model(self.model, Vector3(0, 0, 0), 1.0, WHITE)
-        
+            return
+
+        for i in range(self.model.meshCount):
+            mesh = self.model.meshes[i]
+            material = self.model.materials[self.model.meshMaterial[i]]
+            draw_mesh(mesh, material, self.transform)
+
         health_ratio = self.health / self.max_health
         bar_color = GREEN if health_ratio > 0.6 else (YELLOW if health_ratio > 0.3 else RED)
         
@@ -511,12 +575,14 @@ class Enemy(Model):
             AIState.CHASE: YELLOW,
             AIState.ATTACK: RED,
             AIState.EVADE: PURPLE,
-            AIState.RETREAT: BLUE
+            AIState.RETREAT: BLUE,
+            AIState.EMERGENCY: ORANGE 
         }
         state_color = state_colors.get(self.ai_state, WHITE)
         state_indicator_pos = Vector3(self.position.x, self.position.y + 10, self.position.z)
         draw_cube(state_indicator_pos, 2.0, 1.0, 0.5, state_color)
     
+
     def draw_debug_info(self):
         if not DEBUG:
             return
@@ -526,7 +592,8 @@ class Enemy(Model):
             AIState.CHASE: YELLOW,
             AIState.ATTACK: RED,
             AIState.EVADE: PURPLE,
-            AIState.RETREAT: BLUE
+            AIState.RETREAT: BLUE,
+            AIState.EMERGENCY: ORANGE
         }.get(self.ai_state, WHITE)
         
         end_pos = vector3_add(self.position, vector3_scale(self.velocity, 2.0))
@@ -535,11 +602,13 @@ class Enemy(Model):
 
 class EnemyManager:
     """Manages multiple enemy aircraft"""
-    def __init__(self, models):
+    def __init__(self, models, vfx_manager):
         self.models = models
+        self.vfx_manager = vfx_manager
         self.enemies = []
-        self.max_enemies = 8
-        self.spawn_timer = Timer(10.0)
+
+        self.max_enemies = 18
+        self.spawn_timer = Timer(4.0)
         self.enemy_types = ["fighter", "interceptor", "bomber"]
         
         self.available_models = []
@@ -579,15 +648,15 @@ class EnemyManager:
             enemy_type = random.choice(self.enemy_types)
 
         model_name = random.choice(self.available_models)
-        model = self.models[model_name]
+        base_model = self.models[model_name]
 
-        if model is None:
+        if base_model is None:
             if DEBUG:
                 print(f"[ERROR] Model '{model_name}' is None! Skipping enemy spawn.")
             return None
         
         try:
-            enemy = Enemy(model, position, enemy_type)
+            enemy = Enemy(base_model, position, enemy_type)
             if enemy.model is None:
                 if DEBUG:
                     print(f"[ERROR] Enemy model is None after creation! Model name was: {model_name}")
@@ -615,12 +684,13 @@ class EnemyManager:
         
         for enemy in self.enemies[:]:
             if enemy.health <= 0:
+                self.vfx_manager.create_explosion(enemy.position, "explosion_air02")
                 self.enemies.remove(enemy)
                 if DEBUG:
                     print(f"Enemy destroyed! Remaining: {len(self.enemies)}")
                 continue
             
-            enemy.update(dt, player_position, spatial_grid)
+            enemy.update(dt, player_position, spatial_grid, bullet_manager)
             
             if bullet_manager:
                 self.check_enemy_bullet_collisions(enemy, bullet_manager)
@@ -631,6 +701,7 @@ class EnemyManager:
             if bullet.active and bullet.check_collision_with(enemy):
                 damage = bullet.on_hit(enemy)
                 enemy.take_damage(damage)
+                self.vfx_manager.create_explosion(bullet.position, "explosion_air01", scale=3.0)
                 break
     
     

@@ -6,6 +6,7 @@ from skybox import Skybox
 from bullet import BulletManager
 from building_manager import BuildingManager
 from enemy import EnemyManager
+from vfx_manager import VFXManager
 
 
 class Game:
@@ -79,7 +80,8 @@ class Game:
         self.building_manager = BuildingManager(self.models)
         self.building_manager.generate_city()
 
-        self.enemy_manager = EnemyManager(self.models)
+        self.vfx_manager = VFXManager()
+        self.enemy_manager = EnemyManager(self.models, self.vfx_manager)
  
         print("[*] Spawning initial test enemies...")
         self.enemy_manager.spawn_enemy(Vector3(200, 60, 200), "fighter")
@@ -182,6 +184,9 @@ class Game:
 
 
     def check_collisions(self):
+        if self.player.is_dying:
+            return False
+
         collidable_objects = self.building_manager.get_collision_objects()
         for obj in collidable_objects:
             if self.player.check_collision_with(obj):
@@ -196,12 +201,28 @@ class Game:
         return False
 
 
+    def check_player_bullet_collisions(self):
+        if self.player.is_invulnerable or self.player.is_dying:
+            return
+
+        for bullet in self.bullet_manager.bullets:
+            if bullet.active and bullet.check_collision_with(self.player):
+                damage_dealt = bullet.on_hit(self.player)
+                self.player.take_damage(damage_dealt, on_death=self.player_death_callback)
+                self.camera_shake_timer.activate()
+                self.vfx_manager.create_explosion(bullet.position, "explosion_air01", scale=3.0)
+
+                break
+
     def handle_collision(self, collided_object):
         if self.player.is_invulnerable:
             return
         
+        self.vfx_manager.create_explosion(self.player.position, "explosion_air01")
+        self.camera_shake_timer.activate()
+        
         is_fatal = (self.player.health - 25) <= 0
-        self.player.take_damage(25)
+        self.player.take_damage(25, on_death=self.player_death_callback)
 
         if not is_fatal:
             if hasattr(collided_object, 'has_multiple_collision_boxes') and collided_object.has_multiple_collision_boxes:
@@ -211,7 +232,6 @@ class Game:
                 collision_reason = "building collision"
             
             self.player.start_invulnerability(collision_reason)
-            self.camera_shake_timer.activate()
 
 
     def handle_enemy_collision(self, enemy):
@@ -221,14 +241,22 @@ class Game:
         player_damage = 40
         enemy_damage = 60
         
+        self.vfx_manager.create_explosion(self.player.position, "explosion_air02")
+        self.camera_shake_timer.activate()
+
         is_fatal = (self.player.health - player_damage) <= 0
-        self.player.take_damage(player_damage)
+        self.player.take_damage(player_damage, on_death=self.player_death_callback)
         enemy.take_damage(enemy_damage)
 
         if not is_fatal:
             self.player.start_invulnerability("enemy collision")
-            self.camera_shake_timer.activate()
 
+    def player_death_callback(self):
+        self.vfx_manager.create_explosion(
+            self.player.position, 
+            "explosion_air01", 
+            on_finish=self.player.respawn
+        )
 
     def identify_collision_part(self, building):
         if not hasattr(building, 'get_world_bounding_boxes'):
@@ -282,7 +310,7 @@ class Game:
             damage_per_second = BOUNDARY_DAMAGE_START + (distance_out * BOUNDARY_DAMAGE_SCALING)
             damage_to_apply = damage_per_second * dt
             
-            self.player.take_damage(damage_to_apply)
+            self.player.take_damage(damage_to_apply, on_death=self.player_death_callback)
         else:
             self.show_boundary_warning = False
 
@@ -296,40 +324,46 @@ class Game:
         self.shoot_cooldown.update() 
         self.update_overheat_message() 
 
-        self.camera_yaw -= mouse_delta.x * MOUSE_SENSITIVITY
-        self.camera_pitch -= mouse_delta.y * MOUSE_SENSITIVITY
-        self.camera_pitch = min(max(self.camera_pitch, -1.5), 1.5)
+        if not self.player.is_dying:
+            self.camera_yaw -= mouse_delta.x * MOUSE_SENSITIVITY
+            self.camera_pitch -= mouse_delta.y * MOUSE_SENSITIVITY
+            self.camera_pitch = min(max(self.camera_pitch, -1.5), 1.5)
 
-        player_forward_x = -sin(self.camera_yaw) * cos(self.camera_pitch)
-        player_forward_y = -sin(self.camera_pitch)
-        player_forward_z = -cos(self.camera_yaw) * cos(self.camera_pitch)
-        player_forward_vector = vector3_normalize(Vector3(player_forward_x, player_forward_y, player_forward_z))
+            player_forward_x = -sin(self.camera_yaw) * cos(self.camera_pitch)
+            player_forward_y = -sin(self.camera_pitch)
+            player_forward_z = -cos(self.camera_yaw) * cos(self.camera_pitch)
+            player_forward_vector = vector3_normalize(Vector3(player_forward_x, player_forward_y, player_forward_z))
 
-        self.handle_shooting(player_forward_vector)
-        self.handle_weapon_switching()
+            self.handle_shooting(player_forward_vector)
+            self.handle_weapon_switching()
 
-        if self.is_shooting and not self.is_overheated:
-            self.weapon_heat += self.heat_increase_rate * dt 
-            if self.weapon_heat >= self.max_weapon_heat:
-                self.weapon_heat = self.max_weapon_heat
-                self.is_overheated = True
-                if not self.show_overheat_message:
-                    self.start_overheat_message() 
+            if self.is_shooting and not self.is_overheated:
+                self.weapon_heat += self.heat_increase_rate * dt 
+                if self.weapon_heat >= self.max_weapon_heat:
+                    self.weapon_heat = self.max_weapon_heat
+                    self.is_overheated = True
+                    if not self.show_overheat_message:
+                        self.start_overheat_message() 
+            else:
+                self.weapon_heat -= self.heat_decrease_rate * dt
+                if self.weapon_heat < 0:
+                    self.weapon_heat = 0
+                
+                if self.is_overheated and self.weapon_heat <= 0:
+                    self.is_overheated = False
+
+            self.player.update(dt, player_forward_vector, mouse_delta.x)
         else:
-            self.weapon_heat -= self.heat_decrease_rate * dt
-            if self.weapon_heat < 0:
-                self.weapon_heat = 0
-            
-            if self.is_overheated and self.weapon_heat <= 0:
-                self.is_overheated = False
+            player_forward_vector = Vector3(0,0,0)
 
-        self.player.update(dt, player_forward_vector, mouse_delta.x)
 
         spatial_grid = self.building_manager.get_spatial_grid()
         self.bullet_manager.update(dt, spatial_grid)
 
+        self.vfx_manager.update(dt)
         self.enemy_manager.update(dt, self.player.position, spatial_grid, self.bullet_manager)
 
+        self.check_player_bullet_collisions()
         self.check_collisions()
         self.check_player_bounds(dt)
         
@@ -429,6 +463,7 @@ class Game:
         self.player.draw()
         self.building_manager.draw(camera=self.camera)
         self.bullet_manager.draw(camera=self.camera)
+        self.vfx_manager.draw(self.camera)
         
         self.enemy_manager.draw()
 
