@@ -22,7 +22,7 @@ class Game:
             'muted': False
         }
         init_window(self.resolutions[self.settings['resolution_index']][0],
-                    self.resolutions[self.settings['resolution_index']][1], "Skyscraper")
+                    self.resolutions[self.settings['resolution_index']][1], TITLE)
         init_audio_device()
         set_target_fps(FPS)
 
@@ -120,6 +120,7 @@ class Game:
 
         self.link_rects = []
         self.link_hover_states = []
+        self.credits_scroll_y = 0.0
 
     def setup_ui_elements(self):
         sw, sh = get_screen_width(), get_screen_height()
@@ -604,9 +605,11 @@ class Game:
                                            self.hover_states)
 
     def draw_credits_screen(self):
+        sh = get_screen_height()
+        content_height = len(self.credits) * int(sh * 0.15)
         self.ui_manager.draw_credits_screen(self.skybox, self.menu_camera, self.credits,
                                           {"back": self.button_rects["back"]}, self.hover_states,
-                                          self.link_hover_states)
+                                          self.link_hover_states, self.credits_scroll_y, content_height)
 
     def draw_pause_screen(self):
         self.draw_playing_scene()
@@ -650,8 +653,8 @@ class Game:
                 self.game_state = GameState.CONTROLS_INFO
             elif self.hover_states["credits"]:
                 self.game_state = GameState.CREDITS_SCREEN
-                self.link_rects = [Rectangle(180, 250 + 65 + i * 120, measure_text(c['link'], 25), 25) for i, c in
-                                   enumerate(self.credits) if c['link']]
+                self.credits_scroll_y = 0.0
+                self.link_rects = []
             elif self.hover_states["back"]:
                 self.game_state = GameState.MAIN_MENU
 
@@ -702,15 +705,51 @@ class Game:
     def update_credits_screen(self):
         mouse_pos = get_mouse_position()
         self.hover_states["back"] = check_collision_point_rec(mouse_pos, self.button_rects["back"])
+
+        sw, sh = get_screen_width(), get_screen_height()
+        scroll_speed = 40.0
+        
+        view_y_start = int(sh * 0.25)
+        view_height = int(sh * 0.55) 
+
+        total_content_height = len(self.credits) * int(sh * 0.15)
+        max_scroll = max(0, total_content_height - view_height)
+
+        self.credits_scroll_y -= get_mouse_wheel_move() * scroll_speed
+        
+        if self.credits_scroll_y < 0:
+            self.credits_scroll_y = 0
+        if self.credits_scroll_y > max_scroll:
+            self.credits_scroll_y = max_scroll
+
+        name_font_size = int(30 * sh / 980)
+        text_font_size = int(25 * sh / 980)
+        y_pos_base = view_y_start - int(self.credits_scroll_y)
+        
+        self.link_rects = []
+        link_indices_map = [] 
+
+        for i, credit in enumerate(self.credits):
+            if credit.get('link'):
+                current_y_pos = y_pos_base + i * int(sh * 0.15)
+                link_y = int(current_y_pos + name_font_size * 1.2 + text_font_size * 1.2)
+                
+                if link_y > view_y_start and (link_y + text_font_size) < (view_y_start + view_height):
+                    link_width = measure_text_ex(self.font, credit['link'], text_font_size, 1).x
+                    rect = Rectangle(int(sw * 0.1 + 20), float(link_y), link_width, float(text_font_size))
+                    self.link_rects.append(rect)
+                    link_indices_map.append(i)
+        
         self.link_hover_states = [check_collision_point_rec(mouse_pos, rect) for rect in self.link_rects]
 
         if is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
             if self.hover_states["back"]:
                 self.game_state = GameState.SETTINGS
+                self.credits_scroll_y = 0.0
             else:
                 for i, rect in enumerate(self.link_rects):
-                    if check_collision_point_rec(mouse_pos, rect):
-                        credit_index = [idx for idx, c in enumerate(self.credits) if c['link']][i]
+                    if self.link_hover_states[i]:
+                        credit_index = link_indices_map[i]
                         open_url(self.credits[credit_index]['link'])
                         break
 
