@@ -1,22 +1,19 @@
 from settings import *
 
-from models import Fog, WallCube
-from player import Player
 from skybox import Skybox
-from bullet import BulletManager
-from building_manager import BuildingManager
+from player import Player
 from enemy import EnemyManager
-from vfx_manager import VFXManager
+from models import Fog, WallCube
 from ui_manager import UIManager
+from bullet import BulletManager
+from vfx_manager import VFXManager
+from audio_manager import AudioManager
+from building_manager import BuildingManager
 from highscore_manager import HighScoreManager
-import json
-from math import cos, sin
-from random import choice
 
 
 class Game:
     def __init__(self):
-        # Initialize window with default settings
         self.resolutions = [(1280, 720), (1600, 900), (1900, 980)]
         self.settings = {
             'resolution_index': 2,
@@ -27,7 +24,6 @@ class Game:
         init_window(self.resolutions[self.settings['resolution_index']][0],
                     self.resolutions[self.settings['resolution_index']][1], "Skyscraper")
         init_audio_device()
-        self.apply_audio_settings()
         set_target_fps(FPS)
 
         self.font = None
@@ -46,7 +42,6 @@ class Game:
         self.setup_ui_elements()
         self.load_external_data()
 
-        # --- Correct Camera Setup ---
         self.camera = Camera3D()
         self.camera.up = Vector3(0.0, 1.0, 0.0)
         self.camera.projection = CAMERA_PERSPECTIVE
@@ -58,7 +53,6 @@ class Game:
         self.menu_camera.fovy = 45.0
         self.menu_camera.projection = CAMERA_PERSPECTIVE
         self.menu_camera_angle = 0.0
-        # --- End Correct Camera Setup ---
 
         self.base_fov = BASE_FOV
         self.boost_fov = BOOST_FOV
@@ -70,35 +64,31 @@ class Game:
         self.camera_target_offset = Vector3(0, 1.0, 0)
         self.camera_smooth_factor = 5.0
 
-        # Timers & Effects
-        self.warning_sound_timer = Timer(1.0)
         self.camera_shake_timer = Timer(0.3)
         self.camera_shake_intensity = CAMERA_SHAKE_INTENSITY
         self.show_altitude_warning = False
         self.show_boundary_warning = False
         self.world_boundary = CITY_RADIUS + 50.0
 
-        # Background color cycle
         self.color_phase = 0.0
         self.current_color_index = 0
         self.last_color_change = -1
         self.base_colors = [Vector3(0.6, 0.8, 1.0), Vector3(0.5, 0.7, 0.9), Vector3(0.7, 0.8, 1.0),
                             Vector3(0.4, 0.6, 0.8)]
 
-        # World objects
         wall_size = 1000
         self.fog = Fog(self.camera, size=wall_size, segments=50)
         self.fog.set_fog_parameters(density=0.7, speed=0.2, scale=6.0, height=8.0, color=Vector3(0.6, 0.8, 1.0))
         self.wall_cube = WallCube(size=wall_size, height=200)
 
-        # Managers
+        self.player = Player(self.models["player"])
+
         self.bullet_manager = BulletManager()
         self.building_manager = BuildingManager(self.models)
         self.vfx_manager = VFXManager()
         self.enemy_manager = EnemyManager(self.models, self.vfx_manager)
+        self.audio_manager = AudioManager(self.camera, self.player, self.settings)
 
-        # Player & Weapon
-        self.player = Player(self.models["player"])
         self.current_bullet_type = "normal"
         self.shoot_cooldown = Timer(0.02)
         self.is_shooting = False
@@ -114,7 +104,6 @@ class Game:
         self.building_manager.generate_city()
 
     def load_external_data(self):
-        # Load splash texts
         try:
             with open(join("assets", "ui", "splashes.txt"), 'r') as f:
                 self.splashes = [line.strip() for line in f.readlines() if line.strip()]
@@ -123,7 +112,6 @@ class Game:
             self.splashes = ["Splashes file not found!"]
             self.current_splash = self.splashes[0]
 
-        # Load credits
         try:
             with open(join("assets", "ui", "credits.json"), 'r') as f:
                 self.credits = json.load(f)
@@ -134,29 +122,23 @@ class Game:
         self.link_hover_states = []
 
     def setup_ui_elements(self):
-        """Defines rectangles and hover states for all UI buttons."""
         sw, sh = get_screen_width(), get_screen_height()
         btn_width, btn_height = 350, 60
         center_x = (sw - btn_width) / 2
 
         self.button_rects = {
-            # Main Menu
             "start": Rectangle(center_x, sh / 2, btn_width, btn_height),
             "settings": Rectangle(center_x, sh / 2 + 80, btn_width, btn_height),
             "quit": Rectangle(center_x, sh / 2 + 160, btn_width, btn_height),
-            # Settings Menu
             "graphics": Rectangle(center_x, sh / 2 - 80, btn_width, btn_height),
             "controls": Rectangle(center_x, sh / 2, btn_width, btn_height),
             "credits": Rectangle(center_x, sh / 2 + 80, btn_width, btn_height),
-            # Submenus & Pause
             "back": Rectangle(center_x, sh - 120, btn_width, btn_height),
             "resume": Rectangle(center_x, sh / 2 - 80, btn_width, btn_height),
             "main_menu": Rectangle(center_x, sh / 2, btn_width, btn_height),
             "pause_quit": Rectangle(center_x, sh / 2 + 80, btn_width, btn_height),
-            # Game Over
             "restart": Rectangle(center_x, sh / 2 + 120, btn_width, btn_height),
             "go_main_menu": Rectangle(center_x, sh / 2 + 200, btn_width, btn_height),
-            # Graphics Settings
             "resolution": Rectangle(sw * 0.6, sh * 0.3, 200, 50),
             "fullscreen": Rectangle(sw * 0.6, sh * 0.4, 200, 50),
             "mute": Rectangle(sw * 0.6, sh * 0.5, 200, 50),
@@ -181,8 +163,8 @@ class Game:
         self.is_overheated = False
 
         self.building_manager.generate_city()
+        self.audio_manager.current_game_music = None
 
-        # Spawn initial enemies for the new game
         self.enemy_manager.spawn_enemy(Vector3(200, 60, 200), "fighter")
         self.enemy_manager.spawn_enemy(Vector3(-150, 80, -180), "interceptor")
         self.enemy_manager.spawn_enemy(Vector3(0, 90, -250), "bomber")
@@ -211,11 +193,8 @@ class Game:
             except Exception as e:
                 print(f"[ERROR] Failed to load {model_name}: {e}")
                 self.models[model_name] = None
-
-        self.audio = {
-            "warning": load_sound(join("assets", "audio", "beep-warning.mp3")),
-        }
-        print("[*] Asset loading complete!")
+        
+        print("[*] Non-audio asset loading complete!")
 
     def shoot(self, position, forward_vector):
         if self.shoot_cooldown:
@@ -227,6 +206,14 @@ class Game:
 
         self.bullet_manager.add_bullet(shoot_position, shoot_direction, self.current_bullet_type)
         self.shoot_cooldown.activate()
+
+        self.audio_manager.play_sound_3d(
+            'shooting',
+            self.player.position,
+            self.player.velocity,
+            base_volume=0.8,
+            pitch_variation=0.05
+        )
 
     def start_overheat_message(self):
         self.show_overheat_message = True
@@ -289,7 +276,6 @@ class Game:
                 self.player.take_damage(damage_dealt, on_death=self.player_death_callback)
                 self.camera_shake_timer.activate()
                 self.vfx_manager.create_explosion(bullet.position, "explosion_air01", scale=3.0)
-
                 break
 
     def handle_collision(self, collided_object):
@@ -298,6 +284,7 @@ class Game:
 
         self.vfx_manager.create_explosion(self.player.position, "explosion_air01")
         self.camera_shake_timer.activate()
+        self.audio_manager.play_sound_3d('player_explosion', self.player.position, self.player.velocity, base_volume=0.9)
 
         is_fatal = (self.player.health - 25) <= 0
         self.player.take_damage(25, on_death=self.player_death_callback)
@@ -320,6 +307,7 @@ class Game:
 
         self.vfx_manager.create_explosion(self.player.position, "explosion_air02")
         self.camera_shake_timer.activate()
+        self.audio_manager.play_sound_3d('player_explosion', self.player.position, self.player.velocity, base_volume=1.0)
 
         is_fatal = (self.player.health - player_damage) <= 0
         self.player.take_damage(player_damage, on_death=self.player_death_callback)
@@ -330,6 +318,7 @@ class Game:
 
     def player_death_callback(self):
         self.player_lives -= 1
+        self.audio_manager.play_sound_3d('player_explosion', self.player.position, self.player.velocity, base_volume=1.2)
         if self.player_lives > 0:
             self.vfx_manager.create_explosion(
                 self.player.position,
@@ -382,7 +371,6 @@ class Game:
         dt = get_frame_time()
         mouse_delta = get_mouse_delta()
 
-        self.warning_sound_timer.update()
         self.camera_shake_timer.update()
         self.shoot_cooldown.update()
         self.update_overheat_message()
@@ -411,7 +399,6 @@ class Game:
                 self.weapon_heat -= self.heat_decrease_rate * dt
                 if self.weapon_heat < 0:
                     self.weapon_heat = 0
-
                 if self.is_overheated and self.weapon_heat <= 0:
                     self.is_overheated = False
 
@@ -419,29 +406,24 @@ class Game:
 
         spatial_grid = self.building_manager.get_spatial_grid()
         self.bullet_manager.update(dt, spatial_grid)
-
         self.vfx_manager.update(dt)
-        score_gain, enemies_killed = self.enemy_manager.update(dt, self.player.position, spatial_grid,
-                                                               self.bullet_manager)
+
+        score_gain, enemies_killed, defeated_info = self.enemy_manager.update(dt, self.player.position, spatial_grid, self.bullet_manager, self.audio_manager)
         self.score += score_gain
         self.enemies_defeated += enemies_killed
+
+        for info in defeated_info:
+            self.audio_manager.play_sound_3d('enemy_explosions', info['position'], info['velocity'])
 
         self.check_player_bullet_collisions()
         self.check_collisions()
         self.check_player_bounds(dt)
 
-        altitude_warning_active = self.player.position.y <= ALTITUDE_WARNING_Y and not self.player.is_invulnerable
+        altitude_warning_active = self.player.position.y <= ALTITUDE_WARNING_Y and not self.player.is_invulnerable and not self.player.is_dying
         self.show_altitude_warning = altitude_warning_active
 
-        is_any_warning_active = self.player.is_invulnerable or altitude_warning_active or self.show_boundary_warning
-
-        if is_any_warning_active:
-            if not self.warning_sound_timer:
-                play_sound(self.audio["warning"])
-                self.warning_sound_timer.activate()
-        else:
-            if is_sound_playing(self.audio["warning"]):
-                stop_sound(self.audio["warning"])
+        # Pasar las advertencias al AudioManager para gestionar el sonido
+        self.audio_manager.manage_warning_sound(self.game_state, self.show_altitude_warning, self.show_boundary_warning)
 
         target_fov = self.boost_fov if self.player.is_boosting else self.base_fov
         self.camera.fovy = lerp(self.camera.fovy, target_fov, self.camera_smooth_factor * dt)
@@ -518,23 +500,19 @@ class Game:
         if self.show_altitude_warning:
             alpha = int(abs(sin(get_time() * 10)) * 255)
             warning_color = Color(255, 50, 50, alpha)
-
             text = "WARNING: PULL UP!"
             text_width = measure_text_ex(self.font, text, FONT_SIZE, 1).x
             text_pos_x = (sw - text_width) // 2
             text_pos_y = sh - FONT_SIZE - FONT_PADDING
-
             draw_text_ex(self.font, text, Vector2(text_pos_x, text_pos_y), FONT_SIZE, 1, warning_color)
 
         if self.show_boundary_warning:
             alpha = int(abs(sin(get_time() * 5)) * 255)
             warning_color = Color(255, 165, 0, alpha)
-
             text = "RETURN TO BATTLEFIELD!"
             text_width = measure_text_ex(self.font, text, 40, 1).x
             text_pos_x = (sw - text_width) // 2
             text_pos_y = sh - FONT_SIZE - FONT_PADDING - 60
-
             draw_text_ex(self.font, text, Vector2(text_pos_x, text_pos_y), 40, 1, warning_color)
 
         if self.show_overheat_message:
@@ -548,12 +526,9 @@ class Game:
         for model in self.models.values():
             if model:
                 unload_model(model)
-        for sound in self.audio.values():
-            unload_sound(sound)
+        self.audio_manager.cleanup()
         self.skybox.deinit()
         unload_font(self.font)
-
-    # --- Game Loop ---
 
     def run(self):
         while not self.should_close:
@@ -568,6 +543,9 @@ class Game:
         if window_should_close():
             self.should_close = True
             return
+
+        self.audio_manager.manage_music_streams(self.game_state)
+        self.audio_manager.manage_warning_sound(self.game_state, self.show_altitude_warning, self.show_boundary_warning)
 
         state_handlers = {
             GameState.MAIN_MENU: self.update_main_menu,
@@ -603,7 +581,6 @@ class Game:
 
         end_drawing()
 
-    # --- Screen Draw Methods ---
     def draw_main_menu_screen(self):
         self.ui_manager.draw_main_menu(self.skybox, self.menu_camera, self.highscore_manager.high_score,
                                      self.current_splash,
@@ -642,7 +619,6 @@ class Game:
                                      {"restart": self.button_rects["restart"],
                                       "main_menu": self.button_rects["go_main_menu"]}, self.hover_states)
 
-    # --- UI State Logic ---
     def update_main_menu(self):
         self.menu_camera_angle += get_frame_time() * 0.1
         self.menu_camera.position = Vector3(cos(self.menu_camera_angle) * 10, 2.0, sin(self.menu_camera_angle) * 10)
@@ -674,7 +650,6 @@ class Game:
                 self.game_state = GameState.CONTROLS_INFO
             elif self.hover_states["credits"]:
                 self.game_state = GameState.CREDITS_SCREEN
-                # Pre-calculate link rects when entering the screen
                 self.link_rects = [Rectangle(180, 250 + 65 + i * 120, measure_text(c['link'], 25), 25) for i, c in
                                    enumerate(self.credits) if c['link']]
             elif self.hover_states["back"]:
@@ -713,13 +688,10 @@ class Game:
             if is_window_fullscreen():
                 toggle_fullscreen()
             set_window_size(res[0], res[1])
-        # Update UI rects if needed after resolution change
         self.setup_ui_elements()
 
     def apply_audio_settings(self):
-        set_master_volume(self.settings['master_volume'])
-        if self.settings['muted']:
-            set_master_volume(0.0)
+        self.audio_manager.apply_settings()
 
     def update_controls_info(self):
         mouse_pos = get_mouse_position()
@@ -730,7 +702,6 @@ class Game:
     def update_credits_screen(self):
         mouse_pos = get_mouse_position()
         self.hover_states["back"] = check_collision_point_rec(mouse_pos, self.button_rects["back"])
-
         self.link_hover_states = [check_collision_point_rec(mouse_pos, rect) for rect in self.link_rects]
 
         if is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
@@ -739,7 +710,6 @@ class Game:
             else:
                 for i, rect in enumerate(self.link_rects):
                     if check_collision_point_rec(mouse_pos, rect):
-                        # Find the correct credit item index that corresponds to the link
                         credit_index = [idx for idx, c in enumerate(self.credits) if c['link']][i]
                         open_url(self.credits[credit_index]['link'])
                         break

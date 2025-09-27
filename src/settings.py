@@ -1,10 +1,11 @@
+import json
 from pyray import *
 from raylib import *
+from enum import Enum, auto
+from custom_timer import Timer
+from os.path import join, exists
 from math import sin, cos, radians, degrees, sqrt
 from random import randint, uniform, choice
-from os.path import join, exists
-from custom_timer import Timer
-from enum import Enum, auto
 
 
 class GameState(Enum):
@@ -23,6 +24,9 @@ def lerp(a, b, t):
 
 
 GRID_CELL_SIZE = 150.0
+
+MAX_AUDIO_DISTANCE = 500.0
+SPEED_OF_SOUND = 343.0
 
 BASE_FOV = 45.0
 BOOST_FOV = 60.0

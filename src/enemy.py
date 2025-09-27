@@ -115,6 +115,7 @@ class Enemy(Model):
         self.avoidance_range = 100.0
         self.emergency_avoidance_range = 50.0
 
+
     def take_damage(self, amount):
         self.health -= amount
         if self.health < 0:
@@ -126,6 +127,7 @@ class Enemy(Model):
         if self.health < self.max_health * self.retreat_threshold:
             self.ai_state = AIState.RETREAT
             self.state_timer.activate()
+
 
     def update_ai_state(self, player_position, dt):
         self.decision_timer.update()
@@ -152,6 +154,7 @@ class Enemy(Model):
 
             self.decision_timer.activate()
 
+
     def assess_threats(self, player_position, distance_to_player):
         if distance_to_player < self.detection_range:
             distance_threat = 1.0 - (distance_to_player / self.detection_range)
@@ -167,6 +170,7 @@ class Enemy(Model):
             self.stress_level += 15 * get_frame_time()
 
         self.stress_level = max(0, self.stress_level - 5 * get_frame_time())
+
 
     def calculate_desired_direction(self, player_position, spatial_grid):
         emergency_avoidance = self.calculate_emergency_avoidance(spatial_grid)
@@ -196,6 +200,7 @@ class Enemy(Model):
 
         return vector3_normalize(desired_direction)
 
+
     def patrol_behavior(self):
         to_center = vector3_subtract(self.patrol_center, self.position)
         distance_to_center = vector3_length(to_center)
@@ -212,6 +217,7 @@ class Enemy(Model):
                     return vector3_normalize(right_vector)
                 else:
                     return Vector3(1, 0, 0)
+
 
     def chase_behavior(self, player_position):
         to_player = vector3_subtract(player_position, self.position)
@@ -235,6 +241,7 @@ class Enemy(Model):
                 return direct_chase
         return Vector3(0, 0, 0)
 
+
     def attack_behavior(self, player_position):
         to_player = vector3_subtract(player_position, self.position)
         distance = vector3_length(to_player)
@@ -245,11 +252,12 @@ class Enemy(Model):
         else:
             return self.chase_behavior(player_position)
 
-    def handle_shooting(self, player_position, bullet_manager):
+
+    def handle_shooting(self, player_position, bullet_manager, audio_manager):
         if self.is_in_burst:
             if not self.burst_timer:
                 if self.shots_in_burst_left > 0:
-                    self.fire_one_shot(player_position, bullet_manager)
+                    self.fire_one_shot(player_position, bullet_manager, audio_manager)
                     self.shots_in_burst_left -= 1
                     if self.shots_in_burst_left > 0:
                         self.burst_timer.activate()
@@ -272,12 +280,13 @@ class Enemy(Model):
             self.shots_in_burst_left = self.burst_count
             self.shoot_cooldown.activate()
 
-            self.fire_one_shot(player_position, bullet_manager)
+            self.fire_one_shot(player_position, bullet_manager, audio_manager)
             self.shots_in_burst_left -= 1
             if self.shots_in_burst_left > 0:
                 self.burst_timer.activate()
 
-    def fire_one_shot(self, player_position, bullet_manager):
+
+    def fire_one_shot(self, player_position, bullet_manager, audio_manager):
         inaccuracy = (1.0 - self.skill_level) * 0.1
         direction_to_player = vector3_normalize(vector3_subtract(player_position, self.position))
 
@@ -291,6 +300,16 @@ class Enemy(Model):
         shoot_position = vector3_add(self.position, vector3_scale(final_direction, 6.0))
         bullet_manager.add_bullet(shoot_position, final_direction, self.bullet_type)
 
+        if audio_manager:
+            audio_manager.play_sound_3d(
+                'shooting',
+                self.position,
+                self.velocity,
+                base_volume=0.6,
+                pitch_variation=0.05
+            )
+
+
     def evade_behavior(self, player_position):
         away_from_player = vector3_subtract(self.position, player_position)
         distance = vector3_length(away_from_player)
@@ -299,6 +318,7 @@ class Enemy(Model):
             self.use_boost_if_needed()
             return self.execute_evasive_maneuver(away_from_player)
         return Vector3(0, 0, 0)
+
 
     def retreat_behavior(self, player_position):
         to_center = vector3_subtract(Vector3(0, 60, 0), self.position)
@@ -312,6 +332,7 @@ class Enemy(Model):
         self.use_boost_if_needed()
         return vector3_normalize(retreat_dir)
 
+
     def execute_attack_maneuver(self, player_position):
         if not self.maneuver_timer:
             maneuvers = [ManeuverType.CIRCLE_LEFT, ManeuverType.CIRCLE_RIGHT,
@@ -320,6 +341,7 @@ class Enemy(Model):
             self.maneuver_timer.activate()
 
         return self.execute_maneuver(player_position)
+
 
     def execute_evasive_maneuver(self, away_direction):
         if not self.maneuver_timer:
@@ -332,6 +354,7 @@ class Enemy(Model):
         maneuver_offset = self.execute_maneuver(Vector3(0, 0, 0))
 
         return vector3_normalize(vector3_add(base_direction, maneuver_offset))
+
 
     def execute_maneuver(self, reference_position):
         self.maneuver_timer.update()
@@ -366,6 +389,7 @@ class Enemy(Model):
 
         return Vector3(0, 0, 1)
 
+
     def predict_player_position(self, player_position):
         player_velocity = vector3_subtract(player_position, self.last_player_position)
         prediction_time = 1.0
@@ -375,6 +399,7 @@ class Enemy(Model):
 
         self.last_player_position = Vector3(player_position.x, player_position.y, player_position.z)
         return predicted_position
+
 
     def calculate_emergency_avoidance(self, spatial_grid):
         if not spatial_grid:
@@ -397,6 +422,7 @@ class Enemy(Model):
 
         return Vector3(0, 0, 0)
 
+
     def calculate_general_avoidance(self, spatial_grid):
         if not spatial_grid:
             return Vector3(0, 0, 0)
@@ -413,6 +439,7 @@ class Enemy(Model):
 
         return avoidance_vector
 
+
     def calculate_boundary_avoidance(self):
         boundary_limit = CITY_RADIUS - 50.0
         distance_from_center = sqrt(self.position.x ** 2 + self.position.z ** 2)
@@ -424,6 +451,7 @@ class Enemy(Model):
 
         return Vector3(0, 0, 0)
 
+
     def calculate_altitude_correction(self):
         if self.position.y < self.safe_altitude_min:
             urgency = (self.safe_altitude_min - self.position.y) / 20.0
@@ -434,12 +462,14 @@ class Enemy(Model):
 
         return Vector3(0, 0, 0)
 
+
     def use_boost_if_needed(self):
         if self.current_boost_time > 1.0 and not self.is_boosting:
             if (self.ai_state in [AIState.EVADE, AIState.RETREAT] or
                     self.stress_level > 50 or
                     self.health < self.max_health * 0.5):
                 self.is_boosting = True
+
 
     def update_boost(self, dt):
         if self.is_boosting:
@@ -452,6 +482,7 @@ class Enemy(Model):
                 self.current_boost_time += self.boost_recharge_rate * dt
                 if self.current_boost_time > self.max_boost_time:
                     self.current_boost_time = self.max_boost_time
+
 
     def update_physics(self, dt, desired_direction):
         self.target_direction = desired_direction
@@ -474,7 +505,8 @@ class Enemy(Model):
 
         self.roll_angle += (self.target_roll - self.roll_angle) * self.roll_speed * dt
 
-    def update(self, dt, player_position, spatial_grid=None, bullet_manager=None):
+
+    def update(self, dt, player_position, spatial_grid=None, bullet_manager=None, audio_manager=None):
         self.update_ai_state(player_position, dt)
         self.update_boost(dt)
         self.shoot_cooldown.update()
@@ -485,7 +517,8 @@ class Enemy(Model):
         self.update_model_transform()
 
         if self.ai_state in [AIState.ATTACK, AIState.CHASE, AIState.PATROL, AIState.EVADE] and bullet_manager:
-            self.handle_shooting(player_position, bullet_manager)
+            self.handle_shooting(player_position, bullet_manager, audio_manager)
+
 
     def update_model_transform(self):
         if vector3_length_sqr(self.velocity) > 0.01:
@@ -512,6 +545,7 @@ class Enemy(Model):
             rolled_right.z, rolled_up.z, -forward.z, self.position.z,
             0.0, 0.0, 0.0, 1.0
         )
+
 
     def draw(self):
         if self.model is None:
@@ -561,7 +595,7 @@ class EnemyManager:
         self.enemy_types = ["fighter", "interceptor", "bomber"]
 
         self.available_models = []
-        for model_name in ["enemy01", "enemy02", "enemy03"]:
+        for model_name in ["enemy01", "enemy02"]:
             if model_name in self.models and self.models[model_name] is not None:
                 self.available_models.append(model_name)
             else:
@@ -571,6 +605,7 @@ class EnemyManager:
             print("[ERROR] No enemy models available! Check your model files.")
         else:
             print(f"[*] Available enemy models: {self.available_models}")
+
 
     def spawn_enemy(self, position=None, enemy_type=None):
         if len(self.enemies) >= self.max_enemies:
@@ -609,9 +644,11 @@ class EnemyManager:
             print(f"[ERROR] Failed to create enemy: {e}")
             return None
 
-    def update(self, dt, player_position, spatial_grid=None, bullet_manager=None):
+
+    def update(self, dt, player_position, spatial_grid=None, bullet_manager=None, audio_manager=None):
         score_from_kills = 0
-        enemies_defeated = 0
+        enemies_defeated_count = 0
+        defeated_enemies_info = []
         self.spawn_timer.update()
 
         if not self.spawn_timer and len(self.enemies) < self.max_enemies:
@@ -621,17 +658,19 @@ class EnemyManager:
         for enemy in self.enemies[:]:
             if enemy.health <= 0:
                 score_from_kills += enemy.score_value
-                enemies_defeated += 1
+                enemies_defeated_count += 1
+                defeated_enemies_info.append({'position': enemy.position, 'velocity': enemy.velocity})
                 self.vfx_manager.create_explosion(enemy.position, "explosion_air02")
                 self.enemies.remove(enemy)
                 continue
 
-            enemy.update(dt, player_position, spatial_grid, bullet_manager)
+            enemy.update(dt, player_position, spatial_grid, bullet_manager, audio_manager)
 
             if bullet_manager:
                 self.check_enemy_bullet_collisions(enemy, bullet_manager)
 
-        return score_from_kills, enemies_defeated
+        return score_from_kills, enemies_defeated_count, defeated_enemies_info 
+
 
     def check_enemy_bullet_collisions(self, enemy, bullet_manager):
         for bullet in bullet_manager.bullets:
@@ -641,15 +680,19 @@ class EnemyManager:
                 self.vfx_manager.create_explosion(bullet.position, "explosion_air01", scale=3.0)
                 break
 
+
     def draw(self):
         for enemy in self.enemies:
             enemy.draw()
 
+
     def get_enemy_count(self):
         return len(self.enemies)
 
+
     def clear_all(self):
         self.enemies.clear()
+
 
     def get_enemies(self):
         return self.enemies
